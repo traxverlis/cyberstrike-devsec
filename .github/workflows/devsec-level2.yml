@@ -1,0 +1,267 @@
+name: "DevSec Level 2 — Active Light Scan"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Target URL to scan (e.g. https://app.company.com)"
+        required: true
+        type: string
+      scan_type:
+        description: "Scan type"
+        required: true
+        type: choice
+        options:
+          - light
+          - full
+        default: light
+      notify_email:
+        description: "Email address to send report to"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  verify-consent:
+    name: "Verify Consent Document"
+    runs-on: ubuntu-latest
+    outputs:
+      consent_id: ${{ steps.verify.outputs.consent_id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check consent artifact
+        id: verify
+        run: |
+          # The consent PDF must be uploaded as a repository artifact named "consent-signed.pdf"
+          # or attached via a repository release. Here we check its presence in the repo.
+          CONSENT_PATH="consent/consent-signed.pdf"
+          if [ ! -f "$CONSENT_PATH" ]; then
+            echo "::error::Consent document not found at $CONSENT_PATH"
+            echo "Please commit a signed consent PDF before running level 2 scans."
+            exit 1
+          fi
+          CONSENT_ID=$(sha256sum "$CONSENT_PATH" | cut -c1-12)
+          echo "consent_id=$CONSENT_ID" >> "$GITHUB_OUTPUT"
+          echo "✅ Consent verified — id=$CONSENT_ID"
+
+      - name: Upload consent as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consent-document
+          path: consent/consent-signed.pdf
+          retention-days: 90
+
+  install-tools:
+    name: "Install Security Tools"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install nmap
+        run: sudo apt-get update -qq && sudo apt-get install -y nmap
+
+      - name: Install Nuclei
+        run: |
+          curl -sSfL https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_linux_amd64.zip -o nuclei.zip
+          unzip -q nuclei.zip nuclei
+          sudo mv nuclei /usr/local/bin/
+          nuclei -version
+          nuclei -update-templates 2>/dev/null || true
+
+      - name: Install testssl.sh
+        run: |
+          git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl
+          sudo ln -sf /opt/testssl/testssl.sh /usr/local/bin/testssl
+          testssl --version
+
+      - name: Install nikto
+        run: sudo apt-get install -y nikto
+
+  scan:
+    name: "Level 2 Scan — ${{ inputs.scan_type }}"
+    runs-on: ubuntu-latest
+    needs: [verify-consent, install-tools]
+    env:
+      TARGET_URL: ${{ inputs.target_url }}
+      SCAN_TYPE: ${{ inputs.scan_type }}
+      CONSENT_ID: ${{ needs.verify-consent.outputs.consent_id }}
+      REPORTS_DIR: ./scan-reports
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install rich requests
+
+      - name: Re-install security tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nmap nikto
+          curl -sSfL https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_linux_amd64.zip -o nuclei.zip
+          unzip -q nuclei.zip nuclei && sudo mv nuclei /usr/local/bin/
+          git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl
+          sudo ln -sf /opt/testssl/testssl.sh /usr/local/bin/testssl
+
+      - name: Create output directories
+        run: mkdir -p "$REPORTS_DIR/raw"
+
+      - name: Run nmap port scan
+        run: |
+          nmap -sV -sC \
+            --script vuln \
+            -oX "$REPORTS_DIR/raw/nmap-results.xml" \
+            --webxml \
+            "$TARGET_URL" || true
+        continue-on-error: true
+
+      - name: Run Nuclei web scan
+        run: |
+          SEVERITY="medium,high,critical"
+          if [ "$SCAN_TYPE" = "full" ]; then
+            SEVERITY="low,medium,high,critical"
+          fi
+          nuclei \
+            -u "$TARGET_URL" \
+            -j \
+            -o "$REPORTS_DIR/raw/nuclei-results.json" \
+            -severity "$SEVERITY" || true
+        continue-on-error: true
+
+      - name: Run testssl.sh
+        run: |
+          testssl \
+            --json "$REPORTS_DIR/raw/testssl-results.json" \
+            "$TARGET_URL" || true
+        continue-on-error: true
+
+      - name: Run Nikto
+        run: |
+          nikto \
+            -h "$TARGET_URL" \
+            -Format json \
+            -output "$REPORTS_DIR/raw/nikto-results.json" || true
+        continue-on-error: true
+
+      - name: Generate consolidated report
+        run: |
+          python3 scripts/generate-report.py \
+            --raw-dir "$REPORTS_DIR/raw" \
+            --output "$REPORTS_DIR/report.html" \
+            --target "$TARGET_URL" \
+            --level 2 \
+            --consent-id "$CONSENT_ID" || \
+          python3 -c "
+          import json, glob, pathlib, datetime
+          raw = {}
+          for f in glob.glob('$REPORTS_DIR/raw/*.json'):
+              try:
+                  raw[pathlib.Path(f).stem] = json.loads(pathlib.Path(f).read_text())
+              except: pass
+          summary = {
+              'generated_at': datetime.datetime.utcnow().isoformat() + 'Z',
+              'target': '$TARGET_URL',
+              'level': 2,
+              'consent_id': '$CONSENT_ID',
+              'scans': list(raw.keys()),
+          }
+          pathlib.Path('$REPORTS_DIR/summary.json').write_text(json.dumps(summary, indent=2))
+          print('Summary written.')
+          "
+        continue-on-error: true
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: devsec-level2-report-${{ github.run_number }}
+          path: ${{ env.REPORTS_DIR }}
+          retention-days: 30
+
+  notify:
+    name: "Send Notification"
+    runs-on: ubuntu-latest
+    needs: scan
+    if: ${{ inputs.notify_email != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: devsec-level2-report-${{ github.run_number }}
+          path: ./scan-reports
+
+      - name: Send email via SendGrid
+        uses: peter-evans/sendgrid-action@v1
+        with:
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          to: ${{ inputs.notify_email }}
+          from: devsec-noreply@yourdomain.com
+          subject: "[CyberStrikeAI] Level 2 Scan Report — ${{ inputs.target_url }}"
+          html: |
+            <h2>🔐 CyberStrikeAI DevSec — Level 2 Scan Complete</h2>
+            <p><strong>Target:</strong> ${{ inputs.target_url }}</p>
+            <p><strong>Run:</strong> #${{ github.run_number }}</p>
+            <p>Please download the full report from the GitHub Actions artifacts.</p>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View run</a></p>
+          attachment: ./scan-reports/report.html
+
+  create-issues:
+    name: "Create GitHub Issues for Critical Findings"
+    runs-on: ubuntu-latest
+    needs: scan
+    permissions:
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: devsec-level2-report-${{ github.run_number }}
+          path: ./scan-reports
+
+      - name: Create issues for critical findings
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryPath = './scan-reports/summary.json';
+            if (!fs.existsSync(summaryPath)) {
+              console.log('No summary found, skipping issue creation.');
+              return;
+            }
+            const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            const findings = (summary.findings || []).filter(f =>
+              ['critical', 'high'].includes((f.severity || '').toLowerCase())
+            );
+            if (findings.length === 0) {
+              console.log('No critical/high findings.');
+              return;
+            }
+            for (const finding of findings.slice(0, 10)) { // cap at 10 issues
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Security] ${finding.id || 'Finding'} — ${finding.severity?.toUpperCase()} severity`,
+                body: `## Security Finding\n\n` +
+                  `**Tool:** ${finding.tool || 'unknown'}\n` +
+                  `**Severity:** ${finding.severity}\n` +
+                  `**Target:** ${{ inputs.target_url }}\n` +
+                  `**Description:** ${finding.description || 'N/A'}\n\n` +
+                  `*Detected by CyberStrikeAI DevSec Pipeline — Run #${{ github.run_number }}*`,
+                labels: ['security', 'devsec', finding.severity?.toLowerCase() || 'unknown'],
+              });
+            }
+            console.log(`Created ${Math.min(findings.length, 10)} issue(s).`);

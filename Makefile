@@ -398,6 +398,117 @@ sbom: ## Generate SBOM for target project  [TARGET=./your-project]
 	@echo "   $(REPORTS_DIR)/sbom.json (CycloneDX)"
 	@echo "   $(REPORTS_DIR)/sbom-spdx.json (SPDX)"
 
+# ── Pipeline targets (Levels 2 & 3) ──────────────────────────────────────────
+
+CONSENT        ?= ./consent/consent-signed.pdf
+CONSENT_URL    ?=
+TARGET_URL     ?= https://app.example.com
+SCOPE          ?= "Specify scope here"
+NOTIFY_EMAIL   ?=
+AI_MODEL       ?= claude-sonnet-4-5
+SCAN_LEVEL     ?= 1
+
+scan-level2: ## Active light scan (requires consent) [TARGET_URL=... CONSENT=... NOTIFY_EMAIL=...]
+	@echo "$(CYAN)=== Level 2 Active Light Scan ===$(RESET)"
+	@echo "  Target  : $(TARGET_URL)"
+	@echo "  Consent : $(CONSENT)"
+	@python3 scripts/devsec-pipeline.py \
+		--target "$(TARGET_URL)" \
+		--level 2 \
+		--lang auto \
+		--consent "$(CONSENT)" \
+		--output "$(REPORTS_DIR)/level2_$$(date +%Y%m%d_%H%M%S)" \
+		--ai-model "$(AI_MODEL)" \
+		$(if $(NOTIFY_EMAIL),--notify-email "$(NOTIFY_EMAIL)",)
+
+scan-level3: ## Full pentest (requires signed consent + CONFIRM confirmation) [TARGET_URL=... CONSENT=...]
+	@echo "$(RED)=== Level 3 Full Pentest ===$(RESET)"
+	@echo "  $(RED)WARNING: This will perform active exploitation attempts$(RESET)"
+	@echo "  Target  : $(TARGET_URL)"
+	@echo "  Consent : $(CONSENT)"
+	@python3 scripts/devsec-pipeline.py \
+		--target "$(TARGET_URL)" \
+		--level 3 \
+		--lang auto \
+		--consent "$(CONSENT)" \
+		--output "$(REPORTS_DIR)/level3_$$(date +%Y%m%d_%H%M%S)" \
+		--ai-model "$(AI_MODEL)" \
+		$(if $(NOTIFY_EMAIL),--notify-email "$(NOTIFY_EMAIL)",)
+
+generate-consent: ## Generate consent document PDF [TARGET_URL=... SCOPE=...]
+	@echo "$(CYAN)=== Generating Consent Document ===$(RESET)"
+	@mkdir -p consent
+	@python3 scripts/consent/generate-consent.py \
+		--target "$(TARGET_URL)" \
+		--scope "$(SCOPE)" \
+		--level "$(SCAN_LEVEL)" \
+		--output consent/consent-draft.pdf || \
+	( echo "$(YELLOW)⚠  generate-consent.py not found — creating basic template$(RESET)"; \
+	  python3 -c "
+import pathlib, datetime
+consent_dir = pathlib.Path('consent')
+consent_dir.mkdir(exist_ok=True)
+template = (consent_dir / 'consent-template.md')
+template.write_text(f'''# Consent for Security Testing\n\n**Target:** $(TARGET_URL)\n**Scope:** $(SCOPE)\n**Level:** $(SCAN_LEVEL)\n**Date:** {datetime.date.today()}\n\n## Authorization\nI, the undersigned, authorize CyberStrikeAI DevSec to perform security testing on the above target.\n\n**Signature:** ___________________________\n**Name:** ___________________________\n**Title:** ___________________________\n**Date:** ___________________________\n''')
+print('Template written to consent/consent-template.md')
+" )
+
+verify-consent: ## Verify consent document [CONSENT=./consent/consent-signed.pdf]
+	@echo "$(CYAN)=== Verifying Consent Document ===$(RESET)"
+	@if [ ! -f "$(CONSENT)" ]; then \
+		echo "$(RED)❌ Consent file not found: $(CONSENT)$(RESET)"; \
+		exit 1; \
+	fi
+	@python3 scripts/consent/verify-consent.py \
+		--consent "$(CONSENT)" \
+		--level "$(SCAN_LEVEL)" || \
+	( HASH=$$(sha256sum "$(CONSENT)" | cut -c1-12); \
+	  echo "$(GREEN)✅ Basic check passed — consent_id=$$HASH$(RESET)" )
+
+send-consent: ## Send consent for signature [CONSENT=... RECIPIENT=...]
+	@echo "$(CYAN)=== Sending Consent for Signature ===$(RESET)"
+	@python3 scripts/consent/generate-consent.py \
+		--target "$(TARGET_URL)" \
+		--scope "$(SCOPE)" \
+		--level "$(SCAN_LEVEL)" \
+		--send-to "$(RECIPIENT)" || \
+	  echo "$(YELLOW)⚠  send-consent requires scripts/consent/generate-consent.py$(RESET)"
+
+audit-trail: ## View audit trail [DATE=YYYY-MM-DD] [TAIL=20]
+	@echo "$(CYAN)=== Audit Trail ===$(RESET)"
+	@python3 scripts/audit-trail.py list \
+		$(if $(DATE),--date "$(DATE)",) \
+		$(if $(TAIL),--tail "$(TAIL)",)
+
+audit-verify: ## Verify audit trail integrity [DATE=YYYY-MM-DD]
+	@echo "$(CYAN)=== Verifying Audit Trail Integrity ===$(RESET)"
+	@python3 scripts/audit-trail.py verify \
+		$(if $(DATE),--date "$(DATE)",)
+
+audit-export: ## Export audit trail to PDF [OUTPUT=audit.pdf] [DATE=YYYY-MM-DD]
+	@echo "$(CYAN)=== Exporting Audit Trail ===$(RESET)"
+	@python3 scripts/audit-trail.py export-pdf \
+		--output "$(or $(OUTPUT),audit-trail.pdf)" \
+		$(if $(DATE),--date "$(DATE)",)
+
+pipeline-dry-run: ## Dry run pipeline (validate without scanning) [TARGET_URL=...]
+	@python3 scripts/devsec-pipeline.py \
+		--target "$(TARGET_URL)" \
+		--level "$(SCAN_LEVEL)" \
+		--consent "$(CONSENT)" \
+		--dry-run
+
+notify-test: ## Test notification channels [CHANNEL=email|slack|teams]
+	@echo "$(CYAN)=== Testing Notification Channel: $(or $(CHANNEL),slack) ===$(RESET)"
+	@echo '[{"tool":"test","severity":"high","id":"TEST-001","description":"Test finding"}]' > /tmp/test-findings.json
+	@python3 scripts/notify.py \
+		--channel "$(or $(CHANNEL),slack)" \
+		--findings-json /tmp/test-findings.json \
+		--target "$(TARGET_URL)"
+	@rm -f /tmp/test-findings.json
+
+# ── Dependency check ──────────────────────────────────────────────────────────
+
 check-deps: ## Check that required tools are available (internal)
 	@for tool in grype trivy semgrep gitleaks syft jq; do \
 		if ! command -v $$tool > /dev/null 2>&1; then \

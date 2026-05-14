@@ -1,0 +1,19 @@
+# CyberStrikeAI DevSec — Python Dependencies
+# Aggregate of all requirements across scripts/ and scripts/consent/
+# Install: pip install -r requirements.txt
+
+# ── PDF & Report Generation ────────────────────────────────────────────────
+reportlab>=4.0.0          # PDF generation (generate-consent.py)
+qrcode[pil]>=7.4.0        # QR code generation for consent PDFs
+Pillow>=10.0.0            # Image support (required by qrcode[pil])
+weasyprint>=60.0          # HTML-to-PDF export (audit-trail.py, optional)
+
+# ── PDF Reading & Verification ─────────────────────────────────────────────
+pdfplumber>=0.10.0        # PDF text extraction (verify-consent.py, primary)
+pypdf>=3.0.0              # PDF text extraction (verify-consent.py, fallback)
+
+# ── HTTP & Notifications ───────────────────────────────────────────────────
+requests>=2.31.0          # HTTP client (send-consent.py, notify.py)
+
+# ── Terminal UI ────────────────────────────────────────────────────────────
+rich>=13.0.0              # Rich terminal output (all pipeline scripts)

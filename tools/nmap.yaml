@@ -1,0 +1,175 @@
+# tools/nmap.yaml — Port & Service Scanner
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Only use against authorized targets.
+
+name: nmap
+description: |
+  Network port scanner and service/OS detection tool.
+  Performs TCP/UDP port enumeration, service version detection,
+  OS fingerprinting, and optional NSE script execution.
+  Always obtain written authorization before scanning.
+
+binary: nmap
+version_check: "nmap --version"
+
+parameters:
+  target:
+    description: Target IP, hostname, CIDR range, or file with targets (-iL)
+    type: string
+    required: true
+    example: "192.168.1.0/24"
+
+  scan-type:
+    description: |
+      Scan technique to use:
+        sS  — TCP SYN stealth scan (default, requires root)
+        sV  — Service/version detection
+        sC  — Default NSE scripts (equivalent to --script=default)
+        A   — Aggressive: -sV -sC -O --traceroute
+    type: enum
+    values: [sS, sV, sC, A]
+    default: sS
+    required: false
+
+  ports:
+    description: |
+      Port specification:
+        -p 22,80,443       — specific ports
+        -p 1-1024          — port range
+        -p-                — all 65535 ports
+        --top-ports N      — top N most common ports
+      Leave empty to use nmap defaults (top 1000).
+    type: string
+    required: false
+    example: "22,80,443,8080,8443"
+
+  timing:
+    description: |
+      Timing template (T0–T5). Higher = faster but noisier:
+        T1 — Sneaky (IDS evasion, very slow)
+        T2 — Polite
+        T3 — Normal (default)
+        T4 — Aggressive (faster, reliable networks)
+        T5 — Insane (may miss ports on lossy links)
+    type: enum
+    values: [T1, T2, T3, T4, T5]
+    default: T3
+    required: false
+
+  output-format:
+    description: |
+      Output format for results:
+        xml    — Machine-parseable XML (-oX)
+        json   — Converted via nmap-formatter or xmlstarlet
+        normal — Human-readable text (-oN)
+        all    — All formats simultaneously (-oA)
+    type: enum
+    values: [xml, json, normal, all]
+    default: xml
+    required: false
+
+  output-file:
+    description: Base path/filename for output (without extension)
+    type: string
+    required: false
+    example: "/tmp/scan_results/target_scan"
+
+  scripts:
+    description: |
+      NSE script categories or specific scripts:
+        vulners        — CVE lookup via vulners.com API
+        safe           — All safe scripts (no disruption)
+        default        — Default script set
+        banner         — Banner grabbing
+        http-headers   — HTTP response headers
+        ssl-enum-ciphers — TLS cipher enumeration
+      Comma-separated list.
+    type: string
+    required: false
+    example: "vulners,safe"
+
+  exclude-ports:
+    description: Ports to exclude from scan (comma-separated)
+    type: string
+    required: false
+    example: "9100,515"
+
+  top-ports:
+    description: Scan only the N most common ports. Overrides 'ports' if set.
+    type: integer
+    required: false
+    example: 100
+
+  os-detection:
+    description: Enable OS detection (-O). Requires root/sudo.
+    type: boolean
+    default: false
+    required: false
+
+  no-ping:
+    description: Skip host discovery (-Pn). Treat all hosts as online.
+    type: boolean
+    default: false
+    required: false
+
+  verbose:
+    description: Increase verbosity (-v or -vv)
+    type: enum
+    values: [v, vv]
+    required: false
+
+command_template: |
+  # Build the nmap command dynamically based on parameters
+  # Example expansions:
+
+  # Basic SYN scan, top 100 ports, XML output:
+  # nmap -sS -T3 --top-ports 100 -oX /tmp/scan.xml <target>
+
+  # Aggressive scan with scripts:
+  # nmap -A --script=vulners,safe -T4 -p 1-1024 -oA /tmp/scan <target>
+
+  # Full command template (shell):
+  nmap \
+    -{{ scan-type }} \
+    {% if os-detection %}-O{% endif %} \
+    {% if no-ping %}-Pn{% endif %} \
+    -{{ timing }} \
+    {% if top-ports %}--top-ports {{ top-ports }}{% elif ports %}-p {{ ports }}{% endif %} \
+    {% if exclude-ports %}--exclude-ports {{ exclude-ports }}{% endif %} \
+    {% if scripts %}--script={{ scripts }}{% endif %} \
+    {% if verbose %}-{{ verbose }}{% endif %} \
+    {% if output-file %}
+      {% if output-format == "xml" %}-oX {{ output-file }}.xml{% endif %}
+      {% if output-format == "normal" %}-oN {{ output-file }}.txt{% endif %}
+      {% if output-format == "all" %}-oA {{ output-file }}{% endif %}
+    {% endif %} \
+    {{ target }}
+
+output_schema:
+  hosts:
+    - ip: string
+      hostname: string
+      status: "up|down"
+      ports:
+        - port: integer
+          protocol: "tcp|udp"
+          state: "open|closed|filtered"
+          service: string
+          version: string
+          scripts: object
+      os_matches:
+        - name: string
+          accuracy: integer
+
+notes:
+  - Requires root for SYN scan (-sS) and OS detection (-O)
+  - "-A" enables OS detection, version detection, script scanning, and traceroute"
+  - Use T3 or lower for stealthy/polite scans
+  - Store results in dated output directory for audit trail
+  - Vulners script requires internet access to vulners.com API
+  - Always log scan start/end timestamps for compliance
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: Unauthorized port scanning is illegal in most jurisdictions.
+  Ensure written authorization is in place before executing ANY scan.
+  Document consent file path in audit log.

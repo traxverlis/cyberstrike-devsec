@@ -1,0 +1,279 @@
+name: idor-scanner
+description: Automated IDOR (Insecure Direct Object Reference) detection using ID enumeration
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  base-url:
+    type: string
+    required: true
+    description: Base URL of the target application
+
+  endpoint-pattern:
+    type: string
+    required: true
+    description: >
+      URL pattern with {ID} placeholder (e.g. /api/users/{ID}/profile
+      or /documents/{ID}/download)
+
+  id-range:
+    type: object
+    required: false
+    description: >
+      Range of IDs to test. Either range or wordlist must be provided.
+      Example: {start: 1, end: 1000} or {start: 1000, end: 2000}
+    properties:
+      start:
+        type: integer
+      end:
+        type: integer
+
+  id-wordlist:
+    type: string
+    required: false
+    description: Path to custom ID wordlist (UUIDs, hashes, etc.)
+
+  auth-header:
+    type: string
+    required: true
+    description: >
+      Authorization header value for YOUR authenticated session.
+      The tool will use this to make requests and check if it can
+      access resources belonging to OTHER users.
+      Example: "Bearer eyJhbGciOiJIUzI1NiJ9..."
+
+  victim-auth-header:
+    type: string
+    required: false
+    description: >
+      Optional: Authorization header for a second (victim) account.
+      Used to confirm which resources belong to victim vs attacker.
+
+  http-method:
+    type: string
+    required: false
+    default: GET
+    enum: [GET, POST, PUT, DELETE, PATCH]
+
+  expected-owner-id:
+    type: string
+    required: false
+    description: Your own user ID — responses matching this are skipped (own resources)
+
+  success-indicators:
+    type: object
+    required: false
+    description: Criteria to identify successful unauthorized access
+    properties:
+      status-codes:
+        type: array
+        default: [200, 201]
+      min-content-length:
+        type: integer
+        default: 50
+      exclude-strings:
+        type: array
+        description: Strings that indicate a denial/error (e.g. ["Not found", "Unauthorized"])
+
+  rate:
+    type: integer
+    required: false
+    default: 10
+    description: Requests per second (keep low to avoid detection)
+
+  output-format:
+    type: string
+    required: false
+    default: json
+    enum: [json, csv, text]
+
+  output-dir:
+    type: string
+    required: false
+    default: "./idor-results"
+    description: Directory to store results
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+implementation:
+  language: Python
+  dependencies:
+    - requests
+    - concurrent.futures
+  script: |
+    #!/usr/bin/env python3
+    """IDOR Scanner - Custom implementation using requests + ID enumeration"""
+
+    import requests
+    import json
+    import csv
+    import time
+    import sys
+    import os
+    import argparse
+    from datetime import datetime
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def verify_consent(token_path: str) -> bool:
+        """Verify consent token before any execution."""
+        try:
+            with open(token_path) as f:
+                token = json.load(f)
+            assert token.get('valid') == True, "Token not valid"
+            from datetime import datetime
+            expiry = datetime.fromisoformat(token['expires_at'])
+            assert expiry > datetime.utcnow(), "Token expired"
+            print(f"[CONSENT] Token verified. Authorized by: {token.get('authorized_by', 'unknown')}")
+            return True
+        except Exception as e:
+            print(f"[CONSENT ERROR] {e}")
+            print("[ABORT] Cannot proceed without valid consent token.")
+            sys.exit(1)
+
+    def test_id(session, base_url, pattern, id_val, auth_header, success_cfg, expected_owner):
+        """Test a single ID for IDOR."""
+        url = base_url.rstrip('/') + pattern.replace('{ID}', str(id_val))
+        headers = {"Authorization": auth_header}
+        try:
+            r = session.get(url, headers=headers, timeout=10)
+            # Check success criteria
+            if r.status_code in success_cfg.get('status_codes', [200]):
+                if len(r.text) >= success_cfg.get('min_content_length', 50):
+                    for excl in success_cfg.get('exclude_strings', []):
+                        if excl.lower() in r.text.lower():
+                            return None
+                    return {
+                        "id": id_val,
+                        "url": url,
+                        "status": r.status_code,
+                        "size": len(r.text),
+                        "snippet": r.text[:200]
+                    }
+        except Exception:
+            pass
+        return None
+
+    # Main execution
+    def main():
+        # This would be parameterized via CLI args in production
+        pass
+
+    if __name__ == "__main__":
+        main()
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. Confirm endpoint pattern with {ID} placeholder is correct
+    3. Determine ID format (sequential int, UUID, hash)
+    4. Start with small ID range to verify behavior before full scan
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${output-dir}"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+    python3 << 'PYEOF'
+    import requests, json, time, sys
+    from datetime import datetime
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Configuration from YAML params
+    base_url = "${base-url}"
+    pattern = "${endpoint-pattern}"
+    auth_header = "${auth-header}"
+    rate_limit = ${rate}
+    output_dir = "${output-dir}"
+
+    # ID generation
+    id_start = ${id-range.start:1}
+    id_end = ${id-range.end:100}
+    ids = list(range(id_start, id_end + 1))
+
+    success_cfg = {
+        "status_codes": [200, 201],
+        "min_content_length": 50,
+        "exclude_strings": ["Not found", "Unauthorized", "Forbidden", "Error"]
+    }
+
+    session = requests.Session()
+    findings = []
+    delay = 1.0 / rate_limit
+
+    print(f"[*] IDOR Scan starting: {base_url}{pattern}")
+    print(f"[*] Testing {len(ids)} IDs at {rate_limit} req/s")
+
+    for id_val in ids:
+        url = base_url.rstrip('/') + pattern.replace('{ID}', str(id_val))
+        try:
+            r = session.get(url, headers={"Authorization": auth_header}, timeout=10)
+            if r.status_code in success_cfg["status_codes"] and len(r.text) >= success_cfg["min_content_length"]:
+                excluded = any(e.lower() in r.text.lower() for e in success_cfg["exclude_strings"])
+                if not excluded:
+                    finding = {"id": id_val, "url": url, "status": r.status_code, "size": len(r.text), "snippet": r.text[:300]}
+                    findings.append(finding)
+                    print(f"  [IDOR] ID={id_val} | Status={r.status_code} | Size={len(r.text)}")
+        except Exception as e:
+            pass
+        time.sleep(delay)
+
+    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    report_file = f"{output_dir}/idor-{timestamp}.json"
+    with open(report_file, 'w') as f:
+        json.dump({"scan_time": timestamp, "target": base_url + pattern, "total_tested": len(ids), "findings": findings}, f, indent=2)
+
+    print(f"\n[*] Scan complete. Found {len(findings)} potential IDOR issues.")
+    print(f"[*] Report: {report_file}")
+    PYEOF
+
+  post_execution: |
+    1. Manually verify top findings to confirm unauthorized access
+    2. Document which user's data was accessible
+    3. Assess business impact (PII exposure, financial data, etc.)
+    4. Score CVSS based on data sensitivity
+
+idor_patterns:
+  common_endpoints:
+    - "/api/users/{ID}/profile"
+    - "/api/users/{ID}/orders"
+    - "/api/documents/{ID}"
+    - "/invoices/{ID}/download"
+    - "/api/accounts/{ID}/balance"
+    - "/messages/{ID}"
+
+examples:
+  sequential_ids: |
+    consent-token: ./consent-token.json
+    base-url: "https://target.example.com"
+    endpoint-pattern: "/api/users/{ID}/profile"
+    id-range:
+      start: 1
+      end: 500
+    auth-header: "Bearer eyJhbGciOiJIUzI1NiJ9..."
+    rate: 5
+    output-format: json

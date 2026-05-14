@@ -1,0 +1,196 @@
+name: feroxbuster
+description: Fast, recursive directory and file brute-forcer for web content discovery
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  target:
+    type: string
+    required: true
+    description: Target base URL (e.g. https://example.com)
+
+  wordlist:
+    type: string
+    required: true
+    description: >
+      Path to wordlist file.
+      Recommended:
+        - /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt
+        - /usr/share/seclists/Discovery/Web-Content/common.txt
+        - /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+
+  extensions:
+    type: array
+    required: false
+    description: File extensions to test (e.g. [php, asp, aspx, jsp, json, xml, bak, old])
+
+  depth:
+    type: integer
+    required: false
+    default: 3
+    description: Maximum recursion depth
+
+  rate:
+    type: integer
+    required: false
+    default: 100
+    description: Requests per second
+
+  threads:
+    type: integer
+    required: false
+    default: 50
+    description: Number of concurrent threads
+
+  status-codes:
+    type: array
+    required: false
+    default: [200, 201, 204, 301, 302, 307, 401, 403, 405, 500]
+    description: HTTP status codes to include in results
+
+  filter-size:
+    type: array
+    required: false
+    description: Filter out responses with these exact content sizes (reduce false positives)
+
+  filter-words:
+    type: array
+    required: false
+    description: Filter out responses containing these word counts
+
+  headers:
+    type: object
+    required: false
+    description: Custom HTTP headers (e.g. for authenticated scans)
+
+  cookies:
+    type: string
+    required: false
+    description: Cookie string for authenticated sessions
+
+  user-agent:
+    type: string
+    required: false
+    default: "feroxbuster/2.0"
+    description: Custom User-Agent string
+
+  output-dir:
+    type: string
+    required: false
+    default: "./feroxbuster-results"
+    description: Directory to store results
+
+  insecure:
+    type: boolean
+    required: false
+    default: false
+    description: Allow insecure TLS (self-signed certs)
+
+  no-recursion:
+    type: boolean
+    required: false
+    default: false
+    description: Disable recursive scanning
+
+  extract-links:
+    type: boolean
+    required: false
+    default: true
+    description: Extract links from response bodies and add to scan queue
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. Confirm target is in authorized scope
+    3. Adjust rate and threads to avoid overwhelming target
+    4. Log scan start to audit trail
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${output-dir}"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+    feroxbuster \
+      --url "${target}" \
+      --wordlist "${wordlist}" \
+      ${extensions:+--extensions "$(echo "${extensions}" | tr -d '[]' | tr ',' ',')"} \
+      --depth ${depth} \
+      --rate-limit ${rate} \
+      --threads ${threads} \
+      --status-codes "$(echo "${status-codes}" | tr -d '[]' | tr ',' ',')" \
+      ${filter-size:+--filter-size "$(echo "${filter-size}" | tr -d '[]' | tr ',' ',')"} \
+      ${filter-words:+--filter-words "$(echo "${filter-words}" | tr -d '[]' | tr ',' ',')"} \
+      ${cookies:+--cookies "${cookies}"} \
+      --user-agent "${user-agent}" \
+      ${insecure:+--insecure} \
+      ${no-recursion:+--no-recursion} \
+      ${extract-links:+--extract-links} \
+      --output "${output-dir}/feroxbuster-${TIMESTAMP}.txt" \
+      --json \
+      --auto-tune \
+      --silent
+
+  post_execution: |
+    1. Review interesting paths (admin panels, backup files, config files, API endpoints)
+    2. Note 403 Forbidden paths — may be bypassable
+    3. Feed findings into further testing (SQLi, LFI, auth bypass)
+
+high_value_targets:
+  - "/admin", "/administrator", "/wp-admin", "/phpmyadmin"
+  - "/.git", "/.env", "/config.php", "/web.config", "/application.properties"
+  - "/backup", "/backup.zip", "/db.sql"
+  - "/api/v1", "/api/v2", "/swagger", "/openapi.json"
+  - "/actuator", "/actuator/health", "/actuator/env" (Spring Boot)
+
+examples:
+  basic: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/common.txt
+    depth: 3
+    rate: 50
+
+  thorough_with_extensions: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt
+    extensions: [php, asp, aspx, jsp, json, xml, bak, old, txt, log]
+    depth: 4
+    rate: 75
+    filter-size: [0, 1234]
+
+  authenticated: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/common.txt
+    cookies: "session=abc123; auth=xyz"
+    headers:
+      Authorization: "Bearer <token>"
+    depth: 3

@@ -1,0 +1,211 @@
+# tools/cors-scanner.yaml — CORS Misconfiguration Tester
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Only use against authorized targets.
+
+name: cors-scanner
+description: |
+  Tests for Cross-Origin Resource Sharing (CORS) misconfigurations by
+  sending HTTP requests with manipulated Origin headers and analyzing
+  the Access-Control-Allow-Origin and related response headers.
+  
+  Common CORS vulnerabilities detected:
+    - Reflected Origin (arbitrary origin trusted)
+    - Null origin allowed
+    - Wildcard (*) with credentials
+    - Subdomain trust bypass
+    - Pre-domain injection (evil.example.com trusts evil.victim.com)
+    - Post-domain injection (victim.com.evil.com trusted)
+  
+  Implementation: Uses curl with custom Origin headers + response analysis.
+
+binary: curl
+version_check: "curl --version"
+
+parameters:
+  target-url:
+    description: |
+      Target URL to test for CORS misconfigurations.
+      Should be an API endpoint or URL that returns CORS headers.
+    type: string
+    required: true
+    example: "https://api.example.com/user/profile"
+
+  origins-list:
+    description: |
+      List of Origin header values to test. The scanner will send one
+      request per origin and analyze the response headers.
+      
+      If not provided, uses a default set of bypass payloads including:
+        - https://evil.com
+        - null
+        - https://<target>.evil.com (post-domain injection)
+        - https://evil.<target> (pre-domain injection)
+        - http://<target> (protocol downgrade)
+        - https://localhost
+        - https://127.0.0.1
+    type: array
+    required: false
+    example:
+      - "https://evil.com"
+      - "null"
+      - "https://example.com.evil.com"
+      - "https://evil.example.com"
+      - "https://notexample.com"
+      - "https://localhost"
+
+  output-format:
+    description: |
+      Output format:
+        json  — Structured JSON with per-origin results
+        text  — Human-readable summary
+    type: enum
+    values: [json, text]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write output. Leave empty for stdout.
+    type: string
+    required: false
+
+  follow-redirects:
+    description: Follow HTTP redirects (-L flag)
+    type: boolean
+    default: true
+    required: false
+
+  timeout:
+    description: Timeout in seconds for each request
+    type: integer
+    default: 10
+    required: false
+
+  include-credentials-test:
+    description: |
+      Also test if Access-Control-Allow-Credentials: true is returned
+      with a non-wildcard origin (the most dangerous CORS misconfiguration).
+    type: boolean
+    default: true
+    required: false
+
+  headers:
+    description: Additional request headers (key:value pairs)
+    type: object
+    required: false
+    example:
+      Authorization: "Bearer token123"
+      Cookie: "session=abc"
+
+command_template: |
+  # This tool uses a shell script pattern for execution.
+  # The scanner sends one curl request per origin and parses the response.
+
+  # Single origin test:
+  # curl -s -I \
+  #   -H "Origin: https://evil.com" \
+  #   -H "Access-Control-Request-Method: GET" \
+  #   --max-time 10 \
+  #   https://api.example.com/endpoint
+
+  # Full scan script (bash):
+  # ----------------------------------------
+  # SCAN_SCRIPT="cors_scan_$(date +%Y%m%d_%H%M%S).sh"
+  #
+  # ORIGINS=("https://evil.com" "null" "https://target.evil.com" ...)
+  # TARGET="{{ target-url }}"
+  # RESULTS=()
+  #
+  # for ORIGIN in "${ORIGINS[@]}"; do
+  #   RESPONSE=$(curl -s -D - \
+  #     -H "Origin: ${ORIGIN}" \
+  #     -H "Access-Control-Request-Method: GET" \
+  #     --max-time {{ timeout }} \
+  #     {% if follow-redirects %}-L{% endif %} \
+  #     "${TARGET}" 2>/dev/null)
+  #
+  #   ACAO=$(echo "${RESPONSE}" | grep -i "access-control-allow-origin" | tr -d '\r')
+  #   ACAC=$(echo "${RESPONSE}" | grep -i "access-control-allow-credentials" | tr -d '\r')
+  #   STATUS=$(echo "${RESPONSE}" | head -1)
+  #
+  #   # Analyze for vulnerabilities
+  #   if echo "${ACAO}" | grep -qi "${ORIGIN}"; then
+  #     VULN="REFLECTED_ORIGIN"
+  #   elif echo "${ACAO}" | grep -qi "null"; then
+  #     VULN="NULL_ORIGIN_ALLOWED"
+  #   elif echo "${ACAO}" | grep -q "\*"; then
+  #     if echo "${ACAC}" | grep -qi "true"; then
+  #       VULN="WILDCARD_WITH_CREDENTIALS"
+  #     else
+  #       VULN="WILDCARD_ORIGIN"
+  #     fi
+  #   else
+  #     VULN="NONE"
+  #   fi
+  #
+  #   echo "Origin: ${ORIGIN} | ACAO: ${ACAO} | ACAC: ${ACAC} | Vuln: ${VULN}"
+  # done
+
+vulnerability_patterns:
+  REFLECTED_ORIGIN:
+    severity: HIGH
+    description: Server reflects arbitrary Origin back in ACAO header
+    condition: "ACAO value matches the sent Origin header"
+    
+  REFLECTED_ORIGIN_WITH_CREDENTIALS:
+    severity: CRITICAL
+    description: Reflected origin combined with Allow-Credentials:true
+    condition: "ACAO reflects origin AND ACAC is true"
+    
+  NULL_ORIGIN_ALLOWED:
+    severity: HIGH
+    description: Null origin is trusted — exploitable via sandboxed iframe
+    condition: "ACAO: null"
+    
+  WILDCARD_WITH_CREDENTIALS:
+    severity: CRITICAL
+    description: Wildcard ACAO with Allow-Credentials violates spec but some browsers accept it
+    condition: "ACAO: * AND ACAC: true"
+    
+  SUBDOMAIN_INJECTION:
+    severity: HIGH
+    description: Origin with attacker-controlled subdomain of target is trusted
+    condition: "ACAO reflects evil.target.com"
+    
+  POST_DOMAIN_INJECTION:
+    severity: HIGH
+    description: Origin like target.com.evil.com is trusted
+    condition: "ACAO reflects target.com.evil.com"
+    
+  HTTP_DOWNGRADE:
+    severity: MEDIUM
+    description: HTTP (non-HTTPS) origin accepted for HTTPS endpoint
+    condition: "ACAO: http://target.com for https:// endpoint"
+
+output_schema:
+  target: string
+  scan_timestamp: string
+  results:
+    - origin_tested: string
+      http_status: integer
+      acao_header: string
+      acac_header: string
+      vary_origin: boolean
+      vulnerability: string
+      severity: "NONE|LOW|MEDIUM|HIGH|CRITICAL"
+      description: string
+  summary:
+    total_tested: integer
+    vulnerable: integer
+    highest_severity: string
+
+notes:
+  - Null origin can be sent from sandboxed iframes (data: URIs)
+  - CORS misconfigurations are most dangerous on authenticated API endpoints
+  - Always test with authentication cookies/tokens if available
+  - Check Vary: Origin header — absence may indicate caching issues
+  - Pre-flight OPTIONS requests may reveal different policy than simple requests
+  - Pair with security-headers tool to check CORS in context of overall security posture
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: CORS testing sends modified HTTP requests to the target.
+  Written authorization is required before scanning.

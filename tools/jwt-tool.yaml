@@ -1,0 +1,174 @@
+name: jwt-tool
+description: JWT vulnerability testing - algorithm confusion, none attack, weak secrets, key injection
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  token:
+    type: string
+    required: true
+    description: JWT token to test (header.payload.signature format)
+
+  target-url:
+    type: string
+    required: true
+    description: Target endpoint that validates the JWT
+
+  tests:
+    type: string
+    required: false
+    default: all
+    enum:
+      - all
+      - alg-confusion
+      - none
+      - crack
+      - inject
+      - timing
+    description: >
+      Test suite to run:
+        - all: Run all tests
+        - alg-confusion: RS256/HS256 algorithm confusion attack
+        - none: Algorithm=none attack (unsigned token)
+        - crack: Brute-force weak HMAC secrets
+        - inject: Key injection / kid header injection
+        - timing: Timing-based signature oracle
+
+  secret-wordlist:
+    type: string
+    required: false
+    default: /usr/share/seclists/Passwords/Common-Credentials/top-passwords-shortlist.txt
+    description: Wordlist for brute-forcing weak secrets (used with crack test)
+
+  public-key:
+    type: string
+    required: false
+    description: Path to RSA/EC public key file (for algorithm confusion attacks)
+
+  request-headers:
+    type: object
+    required: false
+    description: Additional HTTP headers for requests to target-url
+
+  http-method:
+    type: string
+    required: false
+    default: GET
+    enum: [GET, POST, PUT, DELETE, PATCH]
+
+  jwt-header-name:
+    type: string
+    required: false
+    default: Authorization
+    description: HTTP header name where JWT is sent (e.g. Authorization, X-Auth-Token)
+
+  jwt-header-prefix:
+    type: string
+    required: false
+    default: "Bearer "
+    description: Prefix before token value in header
+
+  output-format:
+    type: string
+    required: false
+    default: json
+    enum: [json, text, csv]
+    description: Output format for results
+
+  output-dir:
+    type: string
+    required: false
+    default: "./jwt-results"
+    description: Directory to store results
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. Decode JWT header to identify algorithm (HS256, RS256, etc.)
+    3. Log token metadata (expiry, issuer, subject) without logging the full token
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${output-dir}"
+    OUTFILE="${output-dir}/jwt-$(date +%Y%m%d-%H%M%S).${output-format}"
+
+    # Decode token for analysis
+    python3 -c "
+    import base64, json, sys
+    token = '${token}'
+    parts = token.split('.')
+    header = json.loads(base64.b64decode(parts[0] + '=='))
+    payload = json.loads(base64.b64decode(parts[1] + '=='))
+    print('Header:', json.dumps(header, indent=2))
+    print('Payload:', json.dumps(payload, indent=2))
+    "
+
+    # Run jwt_tool tests
+    python3 jwt_tool.py \
+      "${token}" \
+      -t "${target-url}" \
+      -rh "${jwt-header-name}: ${jwt-header-prefix}JWTTOOL_TOKEN" \
+      ${tests == "all" || tests == "alg-confusion":+-X a} \
+      ${tests == "all" || tests == "none":+-X n} \
+      ${tests == "all" || tests == "crack":+-C -d "${secret-wordlist}"} \
+      ${public-key:+-pk "${public-key}" -X s} \
+      -np \
+      2>&1 | tee "$OUTFILE"
+
+  post_execution: |
+    1. Document each successful bypass with request/response evidence
+    2. If token forged successfully, assess full impact (auth bypass, privilege escalation)
+    3. Score CVSS based on impact level
+
+attack_descriptions:
+  alg-confusion: |
+    If server uses RS256, test whether it accepts HS256 tokens signed with the public key.
+    This exploits implementations that trust the 'alg' header value.
+  none: |
+    Change algorithm to 'none' and remove signature. Some implementations skip verification.
+  crack: |
+    Brute-force HMAC secret using wordlist. Weak secrets (e.g. 'secret', 'password') are common.
+  inject: |
+    Inject 'jwk', 'jku', or 'x5u' headers pointing to attacker-controlled key material.
+
+examples:
+  full_test: |
+    consent-token: ./consent-token.json
+    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.XXXX"
+    target-url: "https://target.example.com/api/profile"
+    tests: all
+    secret-wordlist: /usr/share/seclists/Passwords/Common-Credentials/top-passwords-shortlist.txt
+
+  alg_confusion: |
+    consent-token: ./consent-token.json
+    token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+    target-url: "https://target.example.com/api/admin"
+    tests: alg-confusion
+    public-key: ./pubkey.pem

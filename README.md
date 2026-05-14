@@ -6,6 +6,7 @@
 [![Windows Compatible](https://img.shields.io/badge/Windows-Compatible-0078D6?style=flat-square&logo=windows)](docs/installation.md#windows-installation)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![CyberStrikeAI](https://img.shields.io/badge/Powered%20by-CyberStrikeAI-purple?style=flat-square)](https://cyberstrike.ai)
+[![3 Security Levels](https://img.shields.io/badge/Security%20Levels-3-red?style=flat-square&logo=shield&logoColor=white)](docs/pipeline-architecture.md)
 
 > **DevSec extension for CyberStrikeAI teams** — automated security scanning for CVE dependencies, OWASP Top 10, secrets, supply chain, and IaC across C#/.NET, COBOL, Java, React, JavaScript/TypeScript, and Python.
 
@@ -24,6 +25,105 @@
 ## Overview
 
 CyberStrikeAI DevSec is a multi-agent security analysis extension designed to integrate seamlessly into development workflows and CI/CD pipelines. It combines best-in-class open-source security tools — Grype, Trivy, Semgrep, Gitleaks, TruffleHog, Syft, Checkov — orchestrated by CyberStrikeAI's reasoning agents to deliver prioritized, actionable security findings with concrete code-level remediation guidance.
+
+---
+
+## Security Levels Overview
+
+| Level | Type | Prérequis | Tools | Durée estimée |
+|-------|------|-----------|-------|---------------|
+| **1 — Static Analysis** | Passive (no network traffic) | None — runs locally on source code | Grype, Trivy, Semgrep, Gitleaks, TruffleHog, Syft, Checkov | 5–15 min |
+| **2 — Active Light Scan** | Active (generates HTTP traffic) | Written authorization + Level 2 consent token | nmap, nikto, nuclei (passive), testssl, CORS/headers | 30–90 min |
+| **3 — Full Pentest** | Active exploitation | Signed consent document + Level 3 token + operator presence | sqlmap, ffuf, zaproxy, jwt-tool, nuclei-exploit, metasploit | 4–24 hours |
+
+---
+
+## 3-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                CyberStrikeAI DevSec — 3-Level Security Architecture          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │  LEVEL 3 — FULL PENTEST                      🔴 REQUIRES CONSENT L3 │     │
+│  │                                                                      │     │
+│  │  pentest-orchestrator  ←→  pentest-full  ←→  api-pentest            │     │
+│  │  auth-bypass           ←→  roles/pentest-level3                     │     │
+│  │                                                                      │     │
+│  │  Tools: sqlmap, ffuf, zaproxy, jwt-tool, nuclei-exploit,            │     │
+│  │         feroxbuster, idor-scanner, oauth-tester, metasploit         │     │
+│  └────────────────────────────────┬────────────────────────────────────┘     │
+│                                   │ builds on                                │
+│  ┌────────────────────────────────▼────────────────────────────────────┐     │
+│  │  LEVEL 2 — ACTIVE LIGHT SCAN                 🟡 REQUIRES CONSENT L2 │     │
+│  │                                                                      │     │
+│  │  active-scan-orchestrator  ←→  active-recon  ←→  web-vulnerability  │     │
+│  │                            ←→  roles/pentest-level2                 │     │
+│  │                                                                      │     │
+│  │  Tools: nmap, nikto, nuclei (passive), testssl, cors-scanner,      │     │
+│  │         security-headers, whatweb, wapiti                           │     │
+│  └────────────────────────────────┬────────────────────────────────────┘     │
+│                                   │ builds on                                │
+│  ┌────────────────────────────────▼────────────────────────────────────┐     │
+│  │  LEVEL 1 — STATIC ANALYSIS                   🟢 NO AUTHORIZATION    │     │
+│  │                                                  REQUIRED           │     │
+│  │  devsec-orchestrator  ←→  cve-dependency-scan  ←→  sast-devsec     │     │
+│  │  devsec-quick-scan    ←→  owasp-code-review   ←→  supply-chain     │     │
+│  │  devsec-deep-analysis ←→  cobol-security      ←→  dotnet-security  │     │
+│  │                                                                      │     │
+│  │  Tools: grype, trivy, semgrep, gitleaks, trufflehog, syft,         │     │
+│  │         checkov, osv-scanner, dotnet-audit, npm-audit, pip-audit    │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │  CONSENT SYSTEM (L2/L3 only)                                         │     │
+│  │  generate-consent.py → send-consent.py → [sign] → verify-consent.py │     │
+│  │                         → consent-token.json → Gate Check            │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Consent Workflow (Level 2 & 3)
+
+Levels 2 and 3 require a signed authorization document before any scan can run.
+
+```bash
+# Step 1: Generate consent document PDF
+make generate-consent TARGET_URL=https://app.example.com SCOPE="Web app + API"
+# → outputs: consent/consent-draft.pdf
+
+# Step 2: Send to stakeholder for signature
+make send-consent TARGET_URL=https://app.example.com NOTIFY_EMAIL=cto@example.com
+# → emails consent-draft.pdf, awaits signed return
+
+# Step 3: Verify signed document and extract token
+make verify-consent CONSENT=./consent/consent-signed.pdf
+# → validates: hash integrity, signatures, expiry, scope
+# → generates: consent-token.json
+
+# Step 4: Run authorized scan
+make scan-level2 TARGET_URL=https://app.example.com CONSENT=./consent/consent-signed.pdf
+# or
+make scan-level3 TARGET_URL=https://app.example.com CONSENT=./consent/consent-signed.pdf CONFIRM=yes
+```
+
+See [docs/consent-workflow.md](docs/consent-workflow.md) for full details.
+
+---
+
+## AI Backend — GitHub Copilot Integration
+
+CyberStrikeAI DevSec integrates with **GitHub Copilot** for AI-assisted vulnerability analysis:
+
+- **Intelligent triage** — Copilot helps prioritize findings by exploitability and business impact
+- **Remediation suggestions** — Context-aware code fixes for detected vulnerabilities
+- **Report generation** — AI-drafted executive summaries from raw scan data
+- **False positive reduction** — Copilot reviews SAST findings to reduce noise
+
+See [docs/github-copilot-integration.md](docs/github-copilot-integration.md) for setup and prompt templates.
 
 ---
 
@@ -353,54 +453,86 @@ make docker-scan       # Run full scan via Docker (no local install)
 cyberstrike-devsec/
 ├── .github/
 │   └── workflows/
-│       └── devsec-scan.yml        # GitHub Actions CI/CD workflow
+│       ├── devsec-scan.yml            # GitHub Actions — Level 1 CI/CD
+│       ├── devsec-level2.yml          # GitHub Actions — Level 2 active scan
+│       └── devsec-level3.yml          # GitHub Actions — Level 3 pentest
 ├── agents/
-│   ├── devsec-orchestrator.md     # Full audit orchestration agent
-│   ├── devsec-quick-scan.md       # CI/CD pipeline agent (<2 min)
-│   └── devsec-deep-analysis.md    # Pre-release deep analysis agent
+│   ├── devsec-orchestrator.md         # Level 1: Full audit agent
+│   ├── devsec-quick-scan.md           # Level 1: CI/CD pipeline agent (<2 min)
+│   ├── devsec-deep-analysis.md        # Level 1: Pre-release deep analysis
+│   ├── active-scan-orchestrator.md    # Level 2: Active scan orchestrator
+│   └── pentest-orchestrator.md        # Level 3: Full pentest orchestrator
 ├── docs/
-│   ├── installation.md            # Installation guide
-│   ├── usage-guide.md             # Usage documentation
-│   ├── ci-cd-integration.md       # CI/CD integration guide
-│   └── remediation-guide.md       # Security remediation guidance
+│   ├── installation.md
+│   ├── usage-guide.md
+│   ├── ci-cd-integration.md
+│   ├── remediation-guide.md
+│   ├── consent-workflow.md            # Consent system documentation
+│   ├── github-copilot-integration.md  # GitHub Copilot integration guide
+│   └── pipeline-architecture.md       # Architecture documentation
 ├── reports/
 │   └── templates/
-│       ├── devsec-full-report.md  # Full security report template
-│       ├── devsec-cicd-report.md  # CI/CD gate report template
-│       └── executive-summary.md   # Executive summary template
+│       ├── devsec-full-report.md      # Level 1 full report template
+│       ├── devsec-cicd-report.md      # Level 1 CI/CD gate report
+│       ├── executive-summary.md       # Executive summary template
+│       ├── consent-form.md            # Consent form template
+│       ├── level2-active-scan-report.md  # Level 2 report template
+│       ├── level3-pentest-report.md   # Level 3 pentest report template
+│       └── pentest-finding-template.md   # Individual finding template
 ├── roles/
-│   ├── devsec-audit.yaml          # RSSI/compliance auditor role
-│   ├── devsec-ci-pipeline.yaml    # Automated pipeline role (JSON output)
-│   └── devsec-team.yaml           # Developer-friendly role
+│   ├── devsec-audit.yaml              # RSSI/compliance auditor role
+│   ├── devsec-team.yaml               # Developer-friendly role
+│   ├── devsec-ci-pipeline.yaml        # Automated pipeline role
+│   ├── pentest-level2.yaml            # Level 2 active scan role
+│   └── pentest-level3.yaml            # Level 3 full pentest role
 ├── scripts/
-│   ├── install.sh                 # One-command tool installation
-│   └── scan.sh                    # Unified scan script (quick/full/cicd)
+│   ├── install.sh                     # One-command tool installation
+│   ├── scan.sh                        # Unified scan script (quick/full/cicd)
+│   ├── install.ps1                    # Windows installation (PowerShell)
+│   ├── scan.ps1                       # Windows scan script (PowerShell)
+│   ├── make.bat                       # Windows Make wrapper
+│   ├── devsec-pipeline.py             # Main async pipeline orchestrator
+│   ├── audit-trail.py                 # Cryptographic audit trail
+│   ├── generate-report.py             # Multi-tool report aggregator
+│   ├── notify.py                      # Multi-channel notifications
+│   └── consent/
+│       ├── generate-consent.py        # Generate PDF consent document
+│       ├── verify-consent.py          # Verify consent integrity
+│       ├── send-consent.py            # Email consent to stakeholders
+│       └── requirements.txt           # Consent subsystem dependencies
 ├── skills/
-│   ├── cve-dependency-scan/       # CVE scanning across ecosystems
-│   ├── cobol-security/            # COBOL-specific security analysis
-│   ├── dotnet-security/           # .NET/C# security analysis
-│   ├── owasp-code-review/         # OWASP Top 10 static analysis
-│   ├── sast-devsec/               # Advanced SAST + secret detection
-│   ├── supply-chain-audit/        # Supply chain integrity analysis
-│   └── devsec-report/             # Report generation and aggregation
+│   ├── cve-dependency-scan/SKILL.md
+│   ├── owasp-code-review/SKILL.md
+│   ├── sast-devsec/SKILL.md
+│   ├── supply-chain-audit/SKILL.md
+│   ├── devsec-report/SKILL.md
+│   ├── cobol-security/SKILL.md
+│   ├── dotnet-security/SKILL.md
+│   ├── active-recon/SKILL.md          # Level 2: Active reconnaissance
+│   ├── web-vulnerability-scan/SKILL.md # Level 2: Light web scan
+│   ├── pentest-full/SKILL.md          # Level 3: Full pentest
+│   ├── api-pentest/SKILL.md           # Level 3: API security testing
+│   └── auth-bypass/SKILL.md           # Level 3: Auth bypass testing
 ├── tools/
-│   ├── checkov.yaml               # IaC scanner (Terraform, Docker, K8s)
-│   ├── dotnet-audit.yaml          # NuGet vulnerability audit
-│   ├── dotnet-vulnerable.yaml     # dotnet list package --vulnerable
-│   ├── gitleaks.yaml              # Secret detection
-│   ├── grype.yaml                 # CVE scanner
-│   ├── maven-dependency-check.yaml # Java/Maven CVE scan
-│   ├── npm-audit.yaml             # Node.js audit
-│   ├── osv-scanner.yaml           # Google OSV scanner
-│   ├── pip-audit.yaml             # Python audit
-│   ├── semgrep.yaml               # SAST
-│   ├── syft.yaml                  # SBOM generator
-│   ├── trivy.yaml                 # Universal scanner
-│   └── trufflehog.yaml            # Deep secret scanner
-├── docker-compose.yml             # Containerized scan environment
-├── Makefile                       # Make targets for common operations
-├── AUDIT.md                       # Project audit report
-└── README.md                      # This file
+│   ├── grype.yaml, trivy.yaml, semgrep.yaml     # Level 1
+│   ├── gitleaks.yaml, trufflehog.yaml, syft.yaml
+│   ├── checkov.yaml, osv-scanner.yaml
+│   ├── dotnet-audit.yaml, dotnet-vulnerable.yaml
+│   ├── npm-audit.yaml, maven-dependency-check.yaml, pip-audit.yaml
+│   ├── nmap.yaml, nikto.yaml, whatweb.yaml       # Level 2
+│   ├── nuclei-passive.yaml, testssl.yaml
+│   ├── cors-scanner.yaml, security-headers.yaml, wapiti.yaml
+│   ├── sqlmap.yaml, ffuf.yaml, zaproxy.yaml      # Level 3
+│   ├── jwt-tool.yaml, nuclei-exploit.yaml
+│   ├── feroxbuster.yaml, idor-scanner.yaml, oauth-tester.yaml
+├── AUDIT.md                           # QA audit report
+├── CHANGELOG.md                       # Version history
+├── SECURITY.md                        # Security policy & responsible disclosure
+├── requirements.txt                   # Aggregate Python dependencies
+├── docker-compose.yml                 # Containerized scan environment
+├── Makefile                           # Make targets for all 3 levels
+├── config.example.yaml                # Example configuration
+└── README.md                          # This file
 ```
 
 ---

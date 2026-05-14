@@ -1,0 +1,186 @@
+# tools/nikto.yaml — Web Server Vulnerability Scanner
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Active scanner — generates significant HTTP traffic.
+# Only use against explicitly authorized targets.
+
+name: nikto
+description: |
+  Web server vulnerability scanner that checks for dangerous files/programs,
+  outdated server software, server configuration issues, HTTP methods,
+  and common web application vulnerabilities.
+  
+  Nikto is an ACTIVE scanner and will be visible in server logs.
+  Use only on targets with explicit written authorization.
+
+binary: nikto
+version_check: "nikto -Version"
+fallback_invocation: "perl /usr/bin/nikto.pl"
+
+parameters:
+  target:
+    description: |
+      Target URL or hostname. Supports:
+        https://example.com
+        192.168.1.1
+        example.com (HTTP assumed unless -ssl specified)
+    type: string
+    required: true
+    example: "https://example.com"
+
+  port:
+    description: |
+      Target port. Defaults to 80 (HTTP) or 443 (HTTPS).
+      Specify explicitly when using non-standard ports.
+    type: integer
+    required: false
+    default: 443
+    example: 8443
+
+  ssl:
+    description: Force SSL/HTTPS connection (-ssl)
+    type: boolean
+    default: false
+    required: false
+
+  output-format:
+    description: |
+      Output format for results (-Format):
+        json  — Machine-parseable JSON
+        xml   — XML format
+        csv   — CSV spreadsheet
+        htm   — HTML report
+        txt   — Plain text
+    type: enum
+    values: [json, xml, csv, htm, txt]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write output file (-o)
+    type: string
+    required: false
+    example: "/tmp/nikto_results.json"
+
+  tuning:
+    description: |
+      Scan tuning to control test types (-Tuning). Comma-separated codes:
+        0 — File Upload
+        1 — Interesting File / Seen in logs
+        2 — Misconfiguration / Default File
+        3 — Information Disclosure
+        4 — Injection (XSS/Script/HTML)
+        5 — Remote File Retrieval (inside web root)
+        6 — Denial of Service (⚠️ skip for Level 2)
+        7 — Remote File Retrieval (server wide)
+        8 — Command Execution / Remote Shell
+        9 — SQL Injection
+        a — Authentication Bypass
+        b — Software Identification
+        c — Remote Source Inclusion
+        x — Reverse Tuning (exclude rather than include)
+      Recommended for Level 2: 1,2,3,b (safe, informational)
+    type: string
+    default: "1,2,3,b"
+    required: false
+
+  timeout:
+    description: Timeout in seconds for each request (-timeout)
+    type: integer
+    default: 10
+    required: false
+
+  max-time:
+    description: |
+      Maximum scan duration in seconds (-maxtime).
+      Prevents runaway scans on large sites.
+    type: integer
+    required: false
+    example: 600
+
+  no-lookup:
+    description: Disable DNS hostname lookup (-nolookup)
+    type: boolean
+    default: false
+    required: false
+
+  user-agent:
+    description: Custom User-Agent string (-useragent)
+    type: string
+    required: false
+    default: "Mozilla/5.0 (compatible; SecurityAudit/1.0)"
+
+  cookies:
+    description: Cookies to send with requests (-cookies)
+    type: string
+    required: false
+    example: "session=abc123; auth=token"
+
+  auth:
+    description: |
+      HTTP Basic authentication credentials (-id)
+      Format: username:password
+    type: string
+    required: false
+    example: "admin:password123"
+
+  vhost:
+    description: Virtual host to use in Host header (-vhost)
+    type: string
+    required: false
+
+  pause:
+    description: Seconds to pause between requests (-Pause). Use for stealthy scanning.
+    type: integer
+    required: false
+    example: 1
+
+command_template: |
+  # Basic scan with JSON output:
+  # nikto -h https://example.com -Format json -o /tmp/nikto.json -Tuning 1,2,3,b
+
+  # Full command template:
+  nikto \
+    -h {{ target }} \
+    {% if port %}-p {{ port }}{% endif %} \
+    {% if ssl %}-ssl{% endif %} \
+    {% if tuning %}-Tuning {{ tuning }}{% endif %} \
+    {% if timeout %}-timeout {{ timeout }}{% endif %} \
+    {% if max-time %}-maxtime {{ max-time }}{% endif %} \
+    {% if user-agent %}-useragent "{{ user-agent }}"{% endif %} \
+    {% if cookies %}-cookies "{{ cookies }}"{% endif %} \
+    {% if auth %}-id {{ auth }}{% endif %} \
+    {% if vhost %}-vhost {{ vhost }}{% endif %} \
+    {% if no-lookup %}-nolookup{% endif %} \
+    {% if pause %}-Pause {{ pause }}{% endif %} \
+    {% if output-format %}-Format {{ output-format }}{% endif %} \
+    {% if output-file %}-o {{ output-file }}{% endif %} \
+    -nointeractive
+
+output_schema:
+  host: string
+  port: integer
+  ip: string
+  findings:
+    - id: string
+      osvdb: string
+      method: "GET|POST|HEAD|OPTIONS"
+      url: string
+      description: string
+      test_links: array
+
+level2_safe_tuning: "1,2,3,b"
+level2_unsafe_tuning: "0,4,5,6,7,8,9,a,c"
+
+notes:
+  - Nikto is very loud — visible in web server access logs
+  - Use -Pause 1 to reduce scan speed and lower detection probability
+  - Tuning 1,2,3,b is safest for Level 2 — informational only
+  - Avoid tuning 6 (DoS) on production systems under any circumstances
+  - For authenticated scan areas, provide -cookies or -id credentials
+  - Combine with nmap for complete web service assessment
+  - -nointeractive prevents confirmation prompts in automated pipelines
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: Nikto is an active scanner that will appear in server
+  access logs. Written Level 2 authorization is required before execution.
+  Document authorization reference in scan metadata.

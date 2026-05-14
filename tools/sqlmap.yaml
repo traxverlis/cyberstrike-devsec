@@ -1,0 +1,165 @@
+name: sqlmap
+description: Automated SQL injection detection and exploitation tool
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  target-url:
+    type: string
+    required: true
+    description: Target URL to test (e.g. https://example.com/search?q=test)
+
+  data:
+    type: string
+    required: false
+    description: POST data string (for POST requests)
+
+  cookie:
+    type: string
+    required: false
+    description: HTTP Cookie header value for authenticated sessions
+
+  headers:
+    type: object
+    required: false
+    description: Additional HTTP headers as key-value pairs
+
+  level:
+    type: integer
+    required: false
+    default: 1
+    minimum: 1
+    maximum: 5
+    description: Test level (1=safe default, 5=most thorough/aggressive)
+
+  risk:
+    type: integer
+    required: false
+    default: 1
+    minimum: 1
+    maximum: 3
+    description: Risk of tests (1=safe default, 3=may cause damage to DB)
+
+  dbms:
+    type: string
+    required: false
+    description: Force specific DBMS (mysql, postgresql, mssql, oracle, sqlite, etc.)
+
+  output-dir:
+    type: string
+    required: false
+    default: "./sqlmap-results"
+    description: Directory to store results
+
+  tamper:
+    type: array
+    required: false
+    description: >
+      Tamper scripts to bypass WAF/filters.
+      Common: space2comment, between, randomcase, charencode, base64encode
+
+  technique:
+    type: string
+    required: false
+    default: "BEUSTQ"
+    description: SQL injection techniques (B=boolean, E=error, U=union, S=stacked, T=time, Q=inline)
+
+  threads:
+    type: integer
+    required: false
+    default: 5
+    maximum: 10
+    description: Number of concurrent threads (max 10 to avoid detection)
+
+  batch:
+    type: boolean
+    required: false
+    default: true
+    description: Never ask for user input, use default behavior
+
+  dump:
+    type: boolean
+    required: false
+    default: false
+    description: Dump database contents (use with caution, only on confirmed injectable params)
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json exists and is valid
+    2. Confirm target and parameters are in authorized scope
+    3. Default is safe mode (level=1, risk=1) — escalate only if necessary
+    4. Log all actions to audit trail
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    # Build and execute sqlmap command
+    sqlmap \
+      -u "${target-url}" \
+      ${data:+--data="${data}"} \
+      ${cookie:+--cookie="${cookie}"} \
+      --level=${level} \
+      --risk=${risk} \
+      ${dbms:+--dbms="${dbms}"} \
+      --output-dir="${output-dir}" \
+      --technique="${technique}" \
+      --threads=${threads} \
+      ${batch:+--batch} \
+      ${dump:+--dump} \
+      --results-file="${output-dir}/sqlmap-$(date +%Y%m%d-%H%M%S).csv" \
+      --forms \
+      --smart
+
+  post_execution: |
+    1. Review findings for confirmed injections
+    2. Document injectable parameters with evidence
+    3. Calculate CVSS score for confirmed findings
+    4. Flag for escalation if database dump possible
+
+notes:
+  - Default mode (level=1, risk=1) is safe and non-destructive
+  - Increasing level/risk may trigger alerts or cause unintended data modification
+  - Always verify scope before using --dump
+  - Use tamper scripts when WAF is detected
+
+examples:
+  basic_get: |
+    consent-token: ./consent-token.json
+    target-url: "https://target.example.com/search?q=test"
+    level: 1
+    risk: 1
+
+  authenticated_post: |
+    consent-token: ./consent-token.json
+    target-url: "https://target.example.com/api/login"
+    data: "username=admin&password=test"
+    cookie: "session=abc123"
+    level: 2
+    risk: 1
+    tamper: [space2comment, randomcase]

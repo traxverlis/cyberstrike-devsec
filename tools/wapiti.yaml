@@ -1,0 +1,255 @@
+# tools/wapiti.yaml — Active Web Vulnerability Scanner (Light)
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Active scanner — generates HTTP requests to target.
+# Only use against explicitly authorized targets with Level 2 consent.
+
+name: wapiti
+description: |
+  Web application vulnerability scanner that crawls and fuzzes web applications
+  for security issues. Uses a modular approach allowing targeted scans with
+  only safe/informational modules enabled for Level 2 assessments.
+  
+  Level 2 approved modules (safe, non-exploiting):
+    - headers     — HTTP security header analysis
+    - redirect    — Open redirect detection
+    - ssl         — SSL/TLS configuration checks
+    - nikto       — Nikto-style server checks (informational)
+    - methods      — Dangerous HTTP method detection
+    - wapp         — Web application fingerprinting (Wappalyzer)
+    - network_devices — Network device detection
+    - cms          — CMS detection
+  
+  Level 2 FORBIDDEN modules (active exploitation):
+    - sql          — SQL injection
+    - xss          — Cross-site scripting
+    - xxe          — XML external entity
+    - ssrf         — Server-side request forgery
+    - shellshock   — Shellshock
+    - blindsql     — Blind SQL injection
+    - exec         — Command execution
+    - file         — File disclosure
+    - upload       — File upload bypass
+    - ldap         — LDAP injection
+
+binary: wapiti
+version_check: "wapiti --version"
+
+parameters:
+  target:
+    description: |
+      Target URL to scan. Must include scheme.
+      Wapiti will crawl from this starting URL.
+    type: string
+    required: true
+    example: "https://example.com"
+
+  modules:
+    description: |
+      Comma-separated list of modules to enable (-m / --module).
+      Level 2 safe modules only:
+        headers   — HTTP security headers
+        redirect  — Open redirect
+        ssl       — SSL/TLS issues
+        nikto     — Server-side checks
+        methods   — Dangerous HTTP methods (PUT/DELETE/TRACE)
+        wapp      — Technology fingerprinting
+        cms       — CMS detection
+      Default: all safe Level 2 modules.
+    type: string
+    default: "headers,redirect,ssl,nikto,methods,wapp,cms"
+    required: false
+
+  output-format:
+    description: |
+      Report format (-f / --format):
+        json  — Machine-parseable JSON
+        xml   — XML report
+        html  — HTML report
+        txt   — Plain text
+    type: enum
+    values: [json, xml, html, txt]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write report (-o / --output)
+    type: string
+    required: false
+    example: "/tmp/wapiti_report.json"
+
+  scope:
+    description: |
+      Crawl scope (-s / --scope):
+        url     — Only scan the provided URL (no crawling)
+        page    — Scan only the provided page
+        folder  — Scan the folder of the URL
+        domain  — Scan the whole domain
+        punk    — Scan everything (no scope limit — not recommended)
+      Recommended for Level 2: folder or domain.
+    type: enum
+    values: [url, page, folder, domain, punk]
+    default: domain
+    required: false
+
+  max-depth:
+    description: |
+      Maximum crawl depth (-d / --depth).
+      Lower values = faster scan, less coverage.
+      Recommended: 3–5 for balanced coverage.
+    type: integer
+    default: 3
+    required: false
+
+  max-links-per-page:
+    description: Maximum number of links to follow per page (-n)
+    type: integer
+    default: 100
+    required: false
+
+  max-files-per-dir:
+    description: Maximum files to scan per directory
+    type: integer
+    default: 100
+    required: false
+
+  timeout:
+    description: Request timeout in seconds (-t / --timeout)
+    type: integer
+    default: 10
+    required: false
+
+  max-scan-time:
+    description: |
+      Maximum total scan time in seconds (--max-scan-time).
+      Prevents runaway scans on large applications.
+    type: integer
+    required: false
+    example: 1800
+
+  delay:
+    description: |
+      Delay between requests in seconds (-d not --depth, use --wait).
+      Helps avoid overwhelming the target.
+    type: float
+    required: false
+    example: 0.5
+
+  user-agent:
+    description: Custom User-Agent string (-a / --user-agent)
+    type: string
+    required: false
+    default: "Mozilla/5.0 (compatible; SecurityAudit/1.0)"
+
+  cookies:
+    description: |
+      Cookie string or path to cookie file (-c / --cookie).
+      Use for authenticated scanning.
+    type: string
+    required: false
+    example: "session=abc123; auth=token"
+
+  no-bugreport:
+    description: Disable automatic bug reporting to wapiti project
+    type: boolean
+    default: true
+    required: false
+
+  verbose:
+    description: |
+      Verbosity level (-v):
+        0 — Quiet
+        1 — Normal
+        2 — Verbose
+    type: integer
+    values: [0, 1, 2]
+    default: 1
+    required: false
+
+command_template: |
+  # Safe Level 2 scan with JSON output:
+  # wapiti -u https://example.com \
+  #   -m headers,redirect,ssl,nikto,methods,wapp,cms \
+  #   --scope domain \
+  #   -f json -o /tmp/wapiti_report.json \
+  #   --max-scan-time 1800 \
+  #   -v 1
+
+  wapiti \
+    -u {{ target }} \
+    -m {{ modules }} \
+    --scope {{ scope }} \
+    -d {{ max-depth }} \
+    -n {{ max-links-per-page }} \
+    -t {{ timeout }} \
+    {% if max-scan-time %}--max-scan-time {{ max-scan-time }}{% endif %} \
+    {% if delay %}--wait {{ delay }}{% endif %} \
+    {% if user-agent %}-a "{{ user-agent }}"{% endif %} \
+    {% if cookies %}-c "{{ cookies }}"{% endif %} \
+    {% if no-bugreport %}--no-bugreport{% endif %} \
+    -v {{ verbose }} \
+    -f {{ output-format }} \
+    {% if output-file %}-o {{ output-file }}{% endif %}
+
+level2_module_whitelist:
+  - headers
+  - redirect
+  - ssl
+  - nikto
+  - methods
+  - wapp
+  - cms
+  - network_devices
+
+level2_module_blacklist:
+  - sql
+  - xss
+  - xxe
+  - ssrf
+  - shellshock
+  - blindsql
+  - exec
+  - file
+  - upload
+  - ldap
+  - xpath
+  - timesql
+  - permanentxss
+  - csrf
+  - htaccess
+  - spring4shell
+
+output_schema:
+  target: string
+  vulnerabilities:
+    - type: string
+      module: string
+      severity: "Informational|Low|Medium|High|Critical"
+      description: string
+      solution: string
+      references: array
+      http_request:
+        method: string
+        url: string
+        headers: object
+      curl_command: string
+  anomalies:
+    - type: string
+      module: string
+      description: string
+  additionals:
+    - type: string
+      description: string
+
+notes:
+  - Wapiti crawls the site before scanning — can be slow on large sites
+  - Use --scope url or --scope page for quick targeted checks
+  - The methods module detects dangerous HTTP verbs (PUT, DELETE, TRACE, CONNECT)
+  - wapp module uses Wappalyzer fingerprints for technology detection
+  - Authenticated scans require providing session cookies or credentials
+  - --max-scan-time is strongly recommended for production targets
+  - JSON report can be imported into various vulnerability management platforms
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: Wapiti actively crawls and sends HTTP requests to the target.
+  Written Level 2 authorization (consentement niveau 2 signé) is required.
+  Only use the approved module whitelist for Level 2 scans.

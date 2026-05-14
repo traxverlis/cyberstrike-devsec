@@ -1,0 +1,179 @@
+# tools/nuclei-passive.yaml — Passive/Informational Nuclei Templates
+# CyberStrike DevSec — Level 2 Active Scan
+# ⚠️  PASSIVE TEMPLATES ONLY — No exploits, no active attacks.
+# WARNING: Only use against authorized targets.
+
+name: nuclei-passive
+description: |
+  Runs Nuclei with passive/informational templates only.
+  Detects exposed technologies, misconfigurations, and SSL issues
+  without sending exploit payloads. Suitable for Level 2 authorized scans.
+  
+  ⚠️  STRICT CONSTRAINT: Only the following template categories are allowed:
+    - technologies/   — Technology fingerprinting
+    - exposures/      — Exposed files, paths, configs
+    - misconfiguration/ — Server/app misconfigurations
+    - ssl/            — SSL/TLS configuration checks
+  
+  FORBIDDEN categories: exploits, cves, vulnerabilities, fuzzing, takeovers
+
+binary: nuclei
+version_check: "nuclei -version"
+
+parameters:
+  target:
+    description: |
+      Target URL or file with targets (-list).
+      Supports: https://example.com, http://192.168.1.1:8080
+    type: string
+    required: true
+    example: "https://example.com"
+
+  templates:
+    description: |
+      Template categories to run (comma-separated). PASSIVE ONLY:
+        technologies      — Detect frameworks, CMSes, servers
+        exposures         — Exposed sensitive files and paths
+        misconfiguration  — Security misconfigurations
+        ssl               — SSL/TLS audit templates
+      Default: all four passive categories.
+    type: array
+    values: [technologies, exposures, misconfiguration, ssl]
+    default: [technologies, exposures, misconfiguration, ssl]
+    required: false
+
+  severity:
+    description: |
+      Filter templates by severity level (comma-separated):
+        info    — Informational findings
+        low     — Low severity findings
+        medium  — Medium severity (some misconfigs)
+      Default: info,low — appropriate for passive scan.
+      ⚠️  Do NOT include high/critical (those are active exploits).
+    type: string
+    default: "info,low"
+    required: false
+
+  output-format:
+    description: |
+      Output format:
+        json   — Structured JSON (-json)
+        sarif  — SARIF format for CI/CD integration (-sarif-export)
+        text   — Human-readable text (default stdout)
+    type: enum
+    values: [json, sarif, text]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write output file.
+    type: string
+    required: false
+    example: "/tmp/nuclei_passive.json"
+
+  rate-limit:
+    description: |
+      Maximum requests per second (-rate-limit).
+      Lower values reduce detection probability and server impact.
+      Recommended: 50–150 for passive scans.
+    type: integer
+    default: 100
+    required: false
+
+  timeout:
+    description: Timeout in seconds for each template execution (-timeout)
+    type: integer
+    default: 10
+    required: false
+
+  retries:
+    description: Number of retries for failed requests (-retries)
+    type: integer
+    default: 1
+    required: false
+
+  no-interactsh:
+    description: |
+      Disable interactsh (out-of-band) interactions (-no-interactsh).
+      Recommended for passive scans to avoid external callbacks.
+    type: boolean
+    default: true
+    required: false
+
+  bulk-size:
+    description: Number of templates to process in parallel (-bulk-size)
+    type: integer
+    default: 25
+    required: false
+
+  concurrency:
+    description: Number of concurrent template executors (-c)
+    type: integer
+    default: 10
+    required: false
+
+command_template: |
+  # Passive scan, all categories, JSON output:
+  # nuclei -u https://example.com \
+  #   -t technologies/ -t exposures/ -t misconfiguration/ -t ssl/ \
+  #   -severity info,low \
+  #   -rate-limit 100 \
+  #   -no-interactsh \
+  #   -json -o /tmp/nuclei_passive.json
+
+  nuclei \
+    -u {{ target }} \
+    {% for t in templates %}-t {{ t }}/ {% endfor %} \
+    -severity {{ severity }} \
+    -rate-limit {{ rate-limit }} \
+    -timeout {{ timeout }} \
+    -retries {{ retries }} \
+    -bulk-size {{ bulk-size }} \
+    -c {{ concurrency }} \
+    {% if no-interactsh %}-no-interactsh{% endif %} \
+    {% if output-format == "json" %}-json{% if output-file %} -o {{ output-file }}{% endif %}{% endif %} \
+    {% if output-format == "sarif" %}-sarif-export {{ output-file }}{% endif %}
+
+allowed_template_paths:
+  - nuclei-templates/technologies/
+  - nuclei-templates/exposures/
+  - nuclei-templates/misconfiguration/
+  - nuclei-templates/ssl/
+
+forbidden_template_paths:
+  - nuclei-templates/exploits/
+  - nuclei-templates/cves/
+  - nuclei-templates/vulnerabilities/
+  - nuclei-templates/fuzzing/
+  - nuclei-templates/takeovers/
+  - nuclei-templates/network/
+
+output_schema:
+  findings:
+    - template-id: string
+      template-path: string
+      info:
+        name: string
+        author: string
+        severity: "info|low|medium"
+        description: string
+        tags: array
+      matcher-name: string
+      type: string
+      host: string
+      matched-at: string
+      timestamp: string
+
+notes:
+  - Update nuclei templates before scanning: `nuclei -update-templates`
+  - Passive templates do NOT send exploit payloads
+  - -no-interactsh prevents out-of-band DNS/HTTP callbacks
+  - SARIF output integrates with GitHub Code Scanning and VS Code
+  - JSON output can be parsed with jq for findings aggregation
+  - Always verify template category before execution
+  - Rate limit should be adjusted based on target capacity
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: Even passive Nuclei templates generate HTTP requests
+  to the target. Written authorization is required before execution.
+  Only use passive template categories as defined above.

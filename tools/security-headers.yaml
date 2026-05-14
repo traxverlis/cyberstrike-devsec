@@ -1,0 +1,264 @@
+# tools/security-headers.yaml — HTTP Security Headers Analyzer
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Only use against authorized targets.
+
+name: security-headers
+description: |
+  Analyzes HTTP security response headers using curl -I (HEAD request).
+  Checks for presence, correctness, and strength of security headers
+  that protect against XSS, clickjacking, MIME sniffing, and data leakage.
+  
+  Headers checked:
+    - Content-Security-Policy (CSP)
+    - Strict-Transport-Security (HSTS)
+    - X-Frame-Options
+    - X-Content-Type-Options
+    - Referrer-Policy
+    - Permissions-Policy (formerly Feature-Policy)
+    - Cross-Origin-Embedder-Policy (COEP)
+    - Cross-Origin-Opener-Policy (COOP)
+    - Cross-Origin-Resource-Policy (CORP)
+    - Cache-Control (for sensitive endpoints)
+    - Clear-Site-Data
+    - X-Permitted-Cross-Domain-Policies
+
+binary: curl
+version_check: "curl --version"
+
+parameters:
+  target-url:
+    description: |
+      Target URL to analyze. HTTPS recommended.
+      Use full URL including scheme: https://example.com
+    type: string
+    required: true
+    example: "https://example.com"
+
+  output-format:
+    description: |
+      Output format:
+        json  — Structured JSON with header presence, value, and grade
+        text  — Human-readable report with pass/fail/warning indicators
+    type: enum
+    values: [json, text]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write output. Leave empty for stdout.
+    type: string
+    required: false
+
+  follow-redirects:
+    description: |
+      Follow HTTP redirects (-L). Useful for checking final destination headers.
+      Disable to analyze redirect response headers specifically.
+    type: boolean
+    default: true
+    required: false
+
+  include-response-body:
+    description: |
+      Fetch full response (not just headers) to detect CSP in meta tags
+      and inline security configurations.
+    type: boolean
+    default: false
+    required: false
+
+  user-agent:
+    description: Custom User-Agent string for the request
+    type: string
+    required: false
+    default: "Mozilla/5.0 (compatible; SecurityHeadersCheck/1.0)"
+
+  additional-headers:
+    description: Additional request headers to include
+    type: object
+    required: false
+    example:
+      Cookie: "session=abc123"
+      Authorization: "Bearer token"
+
+command_template: |
+  # Basic header check (HEAD request):
+  # curl -s -I -L --max-time 10 \
+  #   -H "User-Agent: SecurityCheck/1.0" \
+  #   https://example.com
+
+  # With response body for CSP meta tag detection:
+  # curl -s -D - --max-time 10 https://example.com
+
+  # Primary curl command:
+  curl \
+    {% if include-response-body %}-s -D -{% else %}-s -I{% endif %} \
+    {% if follow-redirects %}-L{% endif %} \
+    --max-time 10 \
+    -H "User-Agent: {{ user-agent }}" \
+    {% if additional-headers %}
+      {% for key, value in additional-headers.items() %}-H "{{ key }}: {{ value }}" {% endfor %}
+    {% endif %} \
+    {{ target-url }}
+
+  # The output is then parsed by the analysis script (see analysis_rules below)
+
+analysis_rules:
+  Content-Security-Policy:
+    header_name: "content-security-policy"
+    required: true
+    severity_if_missing: HIGH
+    checks:
+      - rule: "default-src present"
+        pattern: "default-src"
+        severity_if_missing: HIGH
+      - rule: "unsafe-inline absent"
+        pattern: "'unsafe-inline'"
+        should_not_contain: true
+        severity_if_present: MEDIUM
+      - rule: "unsafe-eval absent"
+        pattern: "'unsafe-eval'"
+        should_not_contain: true
+        severity_if_present: MEDIUM
+      - rule: "object-src none or restricted"
+        pattern: "object-src"
+        severity_if_missing: LOW
+    description: Prevents XSS and data injection attacks
+
+  Strict-Transport-Security:
+    header_name: "strict-transport-security"
+    required: true
+    severity_if_missing: HIGH
+    checks:
+      - rule: "max-age >= 31536000 (1 year)"
+        pattern: "max-age=([0-9]+)"
+        min_value: 31536000
+        severity_if_low: MEDIUM
+      - rule: "includeSubDomains present"
+        pattern: "includeSubDomains"
+        severity_if_missing: LOW
+      - rule: "preload present"
+        pattern: "preload"
+        severity_if_missing: INFO
+    description: Forces HTTPS connections and prevents SSL stripping
+
+  X-Frame-Options:
+    header_name: "x-frame-options"
+    required: true
+    severity_if_missing: MEDIUM
+    checks:
+      - rule: "Value is DENY or SAMEORIGIN"
+        valid_values: ["DENY", "SAMEORIGIN"]
+        severity_if_invalid: MEDIUM
+    description: Prevents clickjacking attacks
+    note: "Superseded by CSP frame-ancestors but still important for legacy browsers"
+
+  X-Content-Type-Options:
+    header_name: "x-content-type-options"
+    required: true
+    severity_if_missing: MEDIUM
+    checks:
+      - rule: "Value is nosniff"
+        valid_values: ["nosniff"]
+        severity_if_invalid: MEDIUM
+    description: Prevents MIME type sniffing attacks
+
+  Referrer-Policy:
+    header_name: "referrer-policy"
+    required: true
+    severity_if_missing: LOW
+    checks:
+      - rule: "Restrictive policy"
+        recommended_values:
+          - "no-referrer"
+          - "strict-origin"
+          - "strict-origin-when-cross-origin"
+          - "no-referrer-when-downgrade"
+        severity_if_weak: LOW
+    description: Controls how much referrer information is shared
+
+  Permissions-Policy:
+    header_name: "permissions-policy"
+    required: false
+    severity_if_missing: INFO
+    checks:
+      - rule: "Camera, microphone, geolocation restricted"
+        recommended_restrictions: ["camera=()", "microphone=()", "geolocation=()"]
+        severity_if_missing: LOW
+    description: Controls browser feature access (formerly Feature-Policy)
+
+  Cross-Origin-Embedder-Policy:
+    header_name: "cross-origin-embedder-policy"
+    required: false
+    severity_if_missing: INFO
+    recommended_value: "require-corp"
+    description: Required for cross-origin isolation (SharedArrayBuffer)
+
+  Cross-Origin-Opener-Policy:
+    header_name: "cross-origin-opener-policy"
+    required: false
+    severity_if_missing: INFO
+    recommended_value: "same-origin"
+    description: Prevents cross-origin window access
+
+  X-XSS-Protection:
+    header_name: "x-xss-protection"
+    required: false
+    severity_if_missing: INFO
+    note: "Deprecated in modern browsers — CSP is preferred. Value 0 is acceptable."
+    description: Legacy XSS filter (deprecated)
+
+dangerous_headers:
+  Server:
+    description: Reveals web server software and version — aids fingerprinting
+    recommendation: Remove or obscure (e.g., Server: webserver)
+    severity_if_detailed: LOW
+
+  X-Powered-By:
+    description: Reveals backend technology (PHP, ASP.NET, Express, etc.)
+    recommendation: Remove entirely
+    severity_if_present: LOW
+
+  X-AspNet-Version:
+    description: Reveals specific ASP.NET version
+    recommendation: Remove via customHeaders in web.config
+    severity_if_present: LOW
+
+  X-AspNetMvc-Version:
+    description: Reveals ASP.NET MVC version
+    recommendation: MvcHandler.DisableMvcResponseHeader = true
+    severity_if_present: LOW
+
+grading:
+  A+: "All required headers present with strong values, no information leakage"
+  A:  "All required headers present, minor improvements possible"
+  B:  "Most headers present, 1-2 missing non-critical headers"
+  C:  "Several important headers missing"
+  D:  "Multiple critical headers missing"
+  F:  "No security headers present"
+
+output_schema:
+  target: string
+  final_url: string
+  scan_timestamp: string
+  grade: string
+  headers_present: object
+  headers_missing: array
+  dangerous_headers_found: array
+  findings:
+    - header: string
+      present: boolean
+      value: string
+      issues: array
+      severity: "INFO|LOW|MEDIUM|HIGH|CRITICAL"
+      recommendation: string
+
+notes:
+  - HEAD requests are sufficient for header analysis without downloading response body
+  - Some security headers are only returned for authenticated requests
+  - CSP header can be very complex — analyze with https://csp-evaluator.withgoogle.com
+  - HSTS max-age should be >= 31536000 for preload list eligibility
+  - Check both HTTP and HTTPS versions — HTTP should redirect to HTTPS with HSTS
+  - Pair with testssl for complete HTTPS security assessment
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: Even HEAD requests constitute active reconnaissance.
+  Written authorization is required before execution.

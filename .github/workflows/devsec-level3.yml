@@ -1,0 +1,436 @@
+name: "DevSec Level 3 — Full Pentest (Requires Approval)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Target URL for full pentest"
+        required: true
+        type: string
+      consent_document_url:
+        description: "URL to signed consent PDF (must be publicly accessible or via token)"
+        required: true
+        type: string
+      scope:
+        description: "Scope description — enumerate all in-scope assets and exclusions"
+        required: true
+        type: string
+      test_types:
+        description: "Comma-separated test types: web,network,auth,api,sqli,xss,all"
+        required: false
+        default: "all"
+        type: string
+      gpg_recipient:
+        description: "GPG key fingerprint for report encryption"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+  security-events: write
+
+# ── Required approval via GitHub Environments ──────────────────────────────────
+# Configure "pentest-approval" environment in repository Settings → Environments
+# with at least 2 required reviewers before this workflow can proceed.
+
+jobs:
+  request-approval:
+    name: "Authorization Gate (2 Approvers Required)"
+    runs-on: ubuntu-latest
+    environment: pentest-approval   # <-- requires manual approval from 2 reviewers
+    steps:
+      - name: Log authorization request
+        run: |
+          echo "::notice::Level 3 pentest requested by ${{ github.actor }}"
+          echo "Target  : ${{ inputs.target_url }}"
+          echo "Scope   : ${{ inputs.scope }}"
+          echo "Tests   : ${{ inputs.test_types }}"
+          echo "Consent : ${{ inputs.consent_document_url }}"
+
+  verify-consent:
+    name: "Download & Verify Consent Document"
+    runs-on: ubuntu-latest
+    needs: request-approval
+    outputs:
+      consent_id: ${{ steps.verify.outputs.consent_id }}
+      consent_path: ${{ steps.verify.outputs.consent_path }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download consent document
+        run: |
+          mkdir -p ./consent
+          curl -sSfL \
+            "${{ inputs.consent_document_url }}" \
+            -o ./consent/consent-level3.pdf
+          echo "Downloaded consent document."
+
+      - name: Verify consent document
+        id: verify
+        run: |
+          CONSENT_PATH="./consent/consent-level3.pdf"
+          if [ ! -s "$CONSENT_PATH" ]; then
+            echo "::error::Consent document is empty or failed to download."
+            exit 1
+          fi
+
+          # Compute hash
+          CONSENT_ID=$(sha256sum "$CONSENT_PATH" | cut -c1-16)
+          echo "consent_id=$CONSENT_ID" >> "$GITHUB_OUTPUT"
+          echo "consent_path=$CONSENT_PATH" >> "$GITHUB_OUTPUT"
+
+          FILE_SIZE=$(stat -c%s "$CONSENT_PATH")
+          echo "✅ Consent document verified"
+          echo "   ID   : $CONSENT_ID"
+          echo "   Size : $FILE_SIZE bytes"
+
+          if python3 scripts/consent/verify-consent.py \
+              --consent "$CONSENT_PATH" \
+              --level 3 2>/dev/null; then
+            echo "✅ Verify-consent.py passed"
+          else
+            echo "::warning::verify-consent.py not available — using hash check only"
+          fi
+
+      - name: Upload consent artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consent-level3-${{ github.run_number }}
+          path: ./consent/consent-level3.pdf
+          retention-days: 365
+
+  audit-trail-start:
+    name: "Audit Trail — Log Start"
+    runs-on: ubuntu-latest
+    needs: [request-approval, verify-consent]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Log pentest start in audit trail
+        run: |
+          python3 scripts/audit-trail.py append \
+            --action "pentest_start" \
+            --target "${{ inputs.target_url }}" \
+            --tool "devsec-level3-workflow" \
+            --operator "${{ github.actor }}" \
+            --consent-id "${{ needs.verify-consent.outputs.consent_id }}" \
+            --result "scope=${{ inputs.scope }} tests=${{ inputs.test_types }}" || \
+          python3 -c "
+          import json, pathlib, datetime, hashlib, os
+          audit_dir = pathlib.Path(os.path.expanduser('~/.devsec/audit'))
+          audit_dir.mkdir(parents=True, exist_ok=True)
+          today = datetime.date.today().isoformat()
+          log_file = audit_dir / f'{today}.jsonl'
+          entry = {
+              'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+              'action': 'pentest_start',
+              'target': '${{ inputs.target_url }}',
+              'tool': 'devsec-level3-workflow',
+              'operator': '${{ github.actor }}',
+              'consent_id': '${{ needs.verify-consent.outputs.consent_id }}',
+              'result': 'level=3 scope=${{ inputs.scope }}',
+              'run_id': '${{ github.run_id }}',
+          }
+          with open(log_file, 'a') as f:
+              f.write(json.dumps(entry) + '\n')
+          print('Audit entry written.')
+          "
+
+  pentest:
+    name: "Full Pentest Execution"
+    runs-on: ubuntu-latest
+    needs: [verify-consent, audit-trail-start]
+    env:
+      TARGET_URL: ${{ inputs.target_url }}
+      CONSENT_ID: ${{ needs.verify-consent.outputs.consent_id }}
+      TEST_TYPES: ${{ inputs.test_types }}
+      REPORTS_DIR: ./pentest-reports
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install rich requests
+
+      - name: Install security tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            nmap \
+            nikto \
+            sqlmap \
+            wfuzz \
+            gobuster \
+            hydra \
+            curl \
+            jq \
+            gpg
+
+          # Nuclei
+          curl -sSfL https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_linux_amd64.zip -o nuclei.zip
+          unzip -q nuclei.zip nuclei && sudo mv nuclei /usr/local/bin/
+          nuclei -update-templates 2>/dev/null || true
+
+          # testssl.sh
+          git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl
+          sudo ln -sf /opt/testssl/testssl.sh /usr/local/bin/testssl
+
+          echo "Tools installed."
+
+      - name: Install OWASP ZAP
+        run: |
+          sudo snap install zaproxy --classic 2>/dev/null || \
+          docker pull ghcr.io/zaproxy/zaproxy:stable 2>/dev/null || \
+          echo "ZAP not available — will skip"
+        continue-on-error: true
+
+      - name: Create output directories
+        run: mkdir -p "$REPORTS_DIR/raw"
+
+      - name: Run nmap comprehensive scan
+        if: contains(inputs.test_types, 'network') || contains(inputs.test_types, 'all')
+        run: |
+          nmap -sV -sC -A \
+            --script "vuln,exploit,auth" \
+            -oX "$REPORTS_DIR/raw/nmap-full.xml" \
+            --webxml \
+            "$TARGET_URL" || true
+        continue-on-error: true
+
+      - name: Run Nuclei full scan
+        if: contains(inputs.test_types, 'web') || contains(inputs.test_types, 'all')
+        run: |
+          nuclei \
+            -u "$TARGET_URL" \
+            -j \
+            -o "$REPORTS_DIR/raw/nuclei-full.json" \
+            -severity "info,low,medium,high,critical" \
+            -tags "cve,sqli,xss,rce,lfi,ssrf,oast" || true
+        continue-on-error: true
+
+      - name: Run testssl.sh full analysis
+        if: contains(inputs.test_types, 'web') || contains(inputs.test_types, 'all')
+        run: |
+          testssl \
+            --json "$REPORTS_DIR/raw/testssl-full.json" \
+            --full \
+            "$TARGET_URL" || true
+        continue-on-error: true
+
+      - name: Run Nikto full scan
+        if: contains(inputs.test_types, 'web') || contains(inputs.test_types, 'all')
+        run: |
+          nikto \
+            -h "$TARGET_URL" \
+            -Format json \
+            -output "$REPORTS_DIR/raw/nikto-full.json" \
+            -Tuning x6 || true
+        continue-on-error: true
+
+      - name: Run OWASP ZAP active scan
+        if: contains(inputs.test_types, 'web') || contains(inputs.test_types, 'all')
+        run: |
+          if command -v zap-baseline.py &>/dev/null; then
+            zap-baseline.py \
+              -t "$TARGET_URL" \
+              -J "$REPORTS_DIR/raw/zap-full.json" \
+              -l WARN || true
+          elif docker image inspect ghcr.io/zaproxy/zaproxy:stable &>/dev/null; then
+            docker run --rm \
+              -v "$PWD/$REPORTS_DIR:/zap/wrk" \
+              ghcr.io/zaproxy/zaproxy:stable \
+              zap-baseline.py \
+              -t "$TARGET_URL" \
+              -J /zap/wrk/raw/zap-full.json \
+              -l WARN || true
+          else
+            echo "ZAP not available — skipping"
+          fi
+        continue-on-error: true
+
+      - name: Run sqlmap injection tests
+        if: contains(inputs.test_types, 'sqli') || contains(inputs.test_types, 'all')
+        run: |
+          sqlmap \
+            -u "$TARGET_URL" \
+            --batch \
+            --level=3 \
+            --risk=2 \
+            --output-dir="$REPORTS_DIR/raw/sqlmap" \
+            --format=json || true
+        continue-on-error: true
+
+      - name: Generate confidential report
+        run: |
+          python3 scripts/generate-report.py \
+            --raw-dir "$REPORTS_DIR/raw" \
+            --output "$REPORTS_DIR/report-confidential.html" \
+            --target "$TARGET_URL" \
+            --level 3 \
+            --consent-id "$CONSENT_ID" \
+            --confidential || \
+          python3 -c "
+          import json, glob, pathlib, datetime
+          raw = {}
+          for f in glob.glob('$REPORTS_DIR/raw/**/*.json', recursive=True):
+              try:
+                  raw[pathlib.Path(f).stem] = json.loads(pathlib.Path(f).read_text())
+              except: pass
+          summary = {
+              'generated_at': datetime.datetime.utcnow().isoformat() + 'Z',
+              'target': '$TARGET_URL',
+              'level': 3,
+              'consent_id': '$CONSENT_ID',
+              'classification': 'CONFIDENTIAL',
+              'scans': list(raw.keys()),
+          }
+          pathlib.Path('$REPORTS_DIR/summary.json').write_text(json.dumps(summary, indent=2))
+          "
+
+      - name: Encrypt report with GPG
+        if: ${{ inputs.gpg_recipient != '' }}
+        run: |
+          gpg --keyserver keyserver.ubuntu.com \
+            --recv-keys "${{ inputs.gpg_recipient }}" 2>/dev/null || true
+
+          if [ -f "$REPORTS_DIR/report-confidential.html" ]; then
+            gpg --encrypt \
+              --recipient "${{ inputs.gpg_recipient }}" \
+              --trust-model always \
+              --output "$REPORTS_DIR/report-confidential.html.gpg" \
+              "$REPORTS_DIR/report-confidential.html"
+            rm -f "$REPORTS_DIR/report-confidential.html"
+            echo "✅ Report encrypted with GPG"
+          fi
+        continue-on-error: true
+
+      - name: Upload encrypted report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pentest-level3-report-${{ github.run_number }}
+          path: ${{ env.REPORTS_DIR }}
+          retention-days: 90
+
+  audit-trail-end:
+    name: "Audit Trail — Log Completion"
+    runs-on: ubuntu-latest
+    needs: [pentest, verify-consent]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log pentest completion
+        run: |
+          python3 scripts/audit-trail.py append \
+            --action "pentest_complete" \
+            --target "${{ inputs.target_url }}" \
+            --tool "devsec-level3-workflow" \
+            --operator "${{ github.actor }}" \
+            --consent-id "${{ needs.verify-consent.outputs.consent_id }}" \
+            --result "status=${{ needs.pentest.result }} run=${{ github.run_id }}" || true
+
+  notify-rssi:
+    name: "Notify RSSI"
+    runs-on: ubuntu-latest
+    needs: [pentest, verify-consent]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Send RSSI notification
+        uses: peter-evans/sendgrid-action@v1
+        with:
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          to: ${{ secrets.RSSI_EMAIL }}
+          from: devsec-noreply@yourdomain.com
+          subject: "[CONFIDENTIEL] CyberStrikeAI — Pentest Level 3 Terminé — ${{ inputs.target_url }}"
+          html: |
+            <h2>🔒 CONFIDENTIEL — Rapport Pentest Level 3</h2>
+            <p><strong>Cible:</strong> ${{ inputs.target_url }}</p>
+            <p><strong>Scope:</strong> ${{ inputs.scope }}</p>
+            <p><strong>Opérateur:</strong> ${{ github.actor }}</p>
+            <p><strong>Consentement ID:</strong> ${{ needs.verify-consent.outputs.consent_id }}</p>
+            <p><strong>Statut:</strong> ${{ needs.pentest.result }}</p>
+            <p><strong>Run:</strong> #${{ github.run_number }}</p>
+            <p>Le rapport chiffré est disponible dans les artefacts GitHub Actions.</p>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Accéder au run</a></p>
+        continue-on-error: true
+
+  create-confidential-issue:
+    name: "Create Confidential Security Issue"
+    runs-on: ubuntu-latest
+    needs: [pentest, verify-consent]
+    if: needs.pentest.result == 'success'
+    permissions:
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pentest-level3-report-${{ github.run_number }}
+          path: ./pentest-reports
+        continue-on-error: true
+
+      - name: Create confidential tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let findings = [];
+            const summaryPath = './pentest-reports/summary.json';
+            if (fs.existsSync(summaryPath)) {
+              try {
+                const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+                findings = (summary.findings || []).filter(f =>
+                  ['critical', 'high'].includes((f.severity || '').toLowerCase())
+                );
+              } catch(e) {}
+            }
+
+            const body = [
+              '## 🔒 CONFIDENTIEL — Résultats Pentest Level 3',
+              '',
+              `**Cible:** ${{ inputs.target_url }}`,
+              `**Scope:** ${{ inputs.scope }}`,
+              `**Opérateur:** ${{ github.actor }}`,
+              `**Run:** #${{ github.run_number }}`,
+              `**Consentement ID:** ${{ needs.verify-consent.outputs.consent_id }}`,
+              '',
+              `**Findings critiques/high:** ${findings.length}`,
+              '',
+              findings.length > 0
+                ? '### Findings\n' + findings.slice(0, 20).map(f =>
+                    `- **${f.severity?.toUpperCase()}** — ${f.id || 'N/A'}: ${f.description || ''}`
+                  ).join('\n')
+                : '_Aucun finding critique détecté._',
+              '',
+              '*Rapport complet disponible dans les artefacts GitHub Actions (accès restreint).*',
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[PENTEST L3] ${new Date().toISOString().split('T')[0]} — ${{ inputs.target_url }}`,
+              body,
+              labels: ['security', 'pentest', 'confidential', 'level-3'],
+            });

@@ -1,0 +1,187 @@
+name: ffuf
+description: Fast web fuzzer for endpoint and parameter discovery
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  target-url:
+    type: string
+    required: true
+    description: >
+      Target URL with FUZZ keyword placeholder (e.g. https://example.com/FUZZ
+      or https://example.com/api?param=FUZZ)
+
+  wordlist:
+    type: string
+    required: true
+    description: >
+      Path to wordlist file.
+      Recommended SecLists wordlists:
+        - /usr/share/seclists/Discovery/Web-Content/common.txt
+        - /usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt
+        - /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt
+        - /usr/share/seclists/Fuzzing/SQLi/Generic-SQLi.txt
+
+  method:
+    type: string
+    required: false
+    default: GET
+    enum: [GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS]
+    description: HTTP method
+
+  data:
+    type: string
+    required: false
+    description: POST data (use FUZZ keyword for fuzzing parameter values)
+
+  headers:
+    type: object
+    required: false
+    description: HTTP headers as key-value pairs (e.g. Authorization, Content-Type)
+
+  filter-codes:
+    type: array
+    required: false
+    default: [404, 400]
+    description: HTTP status codes to filter out (hide from results)
+
+  match-codes:
+    type: array
+    required: false
+    description: HTTP status codes to match (show only these). Overrides filter-codes.
+
+  filter-size:
+    type: integer
+    required: false
+    description: Filter responses by content size (hide responses of this exact size)
+
+  rate:
+    type: integer
+    required: false
+    default: 100
+    description: Requests per second (lower = stealthier)
+
+  timeout:
+    type: integer
+    required: false
+    default: 10
+    description: Request timeout in seconds
+
+  threads:
+    type: integer
+    required: false
+    default: 40
+    description: Number of concurrent threads
+
+  recursion:
+    type: boolean
+    required: false
+    default: false
+    description: Enable recursive fuzzing on discovered directories
+
+  recursion-depth:
+    type: integer
+    required: false
+    default: 2
+    description: Max recursion depth
+
+  output-dir:
+    type: string
+    required: false
+    default: "./ffuf-results"
+    description: Directory to store results
+
+  output-format:
+    type: string
+    required: false
+    default: json
+    enum: [json, csv, ejson, html, md, all]
+    description: Output format
+
+  extensions:
+    type: array
+    required: false
+    description: File extensions to append to wordlist entries (e.g. [php, asp, aspx, jsp])
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. Confirm FUZZ keyword is placed correctly in target-url or data
+    3. Select appropriate wordlist for the technology stack
+    4. Log action to audit trail
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${output-dir}"
+
+    ffuf \
+      -u "${target-url}" \
+      -w "${wordlist}" \
+      -X ${method} \
+      ${data:+-d "${data}"} \
+      -rate ${rate} \
+      -timeout ${timeout} \
+      -t ${threads} \
+      -fc $(echo "${filter-codes}" | tr -d '[]' | tr ',' ',') \
+      ${match-codes:+-mc $(echo "${match-codes}" | tr -d '[]' | tr ',' ',')} \
+      ${filter-size:+-fs "${filter-size}"} \
+      ${recursion:+-recursion -recursion-depth "${recursion-depth}"} \
+      ${extensions:+-e "$(echo "${extensions}" | tr -d '[]' | tr ',' ',')"} \
+      -o "${output-dir}/ffuf-$(date +%Y%m%d-%H%M%S).${output-format}" \
+      -of ${output-format} \
+      -v
+
+  post_execution: |
+    1. Review discovered endpoints for sensitive paths
+    2. Identify backup files, config files, admin panels
+    3. Feed interesting endpoints into further testing tools
+
+examples:
+  directory_fuzzing: |
+    consent-token: ./consent-token.json
+    target-url: "https://target.example.com/FUZZ"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/common.txt
+    filter-codes: [404, 403]
+    rate: 50
+
+  api_fuzzing: |
+    consent-token: ./consent-token.json
+    target-url: "https://target.example.com/api/v1/FUZZ"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt
+    method: GET
+    headers:
+      Authorization: "Bearer <token>"
+    match-codes: [200, 201, 400, 500]
+
+  parameter_fuzzing: |
+    consent-token: ./consent-token.json
+    target-url: "https://target.example.com/search?FUZZ=test"
+    wordlist: /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt
+    filter-codes: [404]

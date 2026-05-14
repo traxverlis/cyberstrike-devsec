@@ -1,0 +1,205 @@
+name: zaproxy
+description: OWASP ZAP active security scanner - baseline, full, and API scans
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  target:
+    type: string
+    required: true
+    description: Target URL (e.g. https://example.com)
+
+  scan-type:
+    type: string
+    required: true
+    default: baseline
+    enum:
+      - baseline
+      - full
+      - api
+    description: >
+      Scan type:
+        - baseline: Passive scan only, spider, no active attacks (safest)
+        - full: Full active scan including attack rules
+        - api: API-specific scan using OpenAPI/Swagger spec
+
+  ajax-spider:
+    type: boolean
+    required: false
+    default: false
+    description: Use AJAX spider for JavaScript-heavy applications
+
+  auth-type:
+    type: string
+    required: false
+    enum: [form, http-basic, bearer, none]
+    default: none
+    description: Authentication method for authenticated scans
+
+  username:
+    type: string
+    required: false
+    description: Username for authenticated scans
+
+  password:
+    type: string
+    required: false
+    description: Password for authenticated scans (handle with care)
+
+  api-spec:
+    type: string
+    required: false
+    description: Path or URL to OpenAPI/Swagger spec file (required for scan-type=api)
+
+  api-key:
+    type: string
+    required: false
+    description: Existing ZAP API key if connecting to running ZAP instance
+
+  context-name:
+    type: string
+    required: false
+    default: "pentest-context"
+    description: ZAP context name for this scan
+
+  alert-threshold:
+    type: string
+    required: false
+    default: Medium
+    enum: [Low, Medium, High]
+    description: Minimum alert level to report
+
+  report-format:
+    type: string
+    required: false
+    default: json
+    enum: [json, html, xml, sarif, md]
+    description: Output report format
+
+  report-dir:
+    type: string
+    required: false
+    default: "./zap-results"
+    description: Directory to store scan reports
+
+  max-depth:
+    type: integer
+    required: false
+    default: 5
+    description: Maximum spider crawl depth
+
+  max-duration:
+    type: integer
+    required: false
+    default: 60
+    description: Maximum scan duration in minutes
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. For full scan: warn that active attacks will be performed
+    3. Ensure ZAP is installed (apt install zaproxy or docker pull ghcr.io/zaproxy/zaproxy:stable)
+    4. Log scan parameters to audit trail
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${report-dir}"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    REPORT_FILE="${report-dir}/zap-${scan-type}-${TIMESTAMP}.${report-format}"
+
+    # Select scan script based on type
+    case "${scan-type}" in
+      baseline)
+        docker run --rm -v "${report-dir}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+          zap-baseline.py \
+          -t "${target}" \
+          -r "/zap/wrk/zap-baseline-${TIMESTAMP}.html" \
+          -J "/zap/wrk/zap-baseline-${TIMESTAMP}.json" \
+          ${ajax-spider:+-j} \
+          -l ${alert-threshold} \
+          -m ${max-duration}
+        ;;
+      full)
+        docker run --rm -v "${report-dir}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+          zap-full-scan.py \
+          -t "${target}" \
+          -r "/zap/wrk/zap-full-${TIMESTAMP}.html" \
+          -J "/zap/wrk/zap-full-${TIMESTAMP}.json" \
+          ${ajax-spider:+-j} \
+          -l ${alert-threshold} \
+          -m ${max-duration} \
+          -d
+        ;;
+      api)
+        docker run --rm -v "${report-dir}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+          zap-api-scan.py \
+          -t "${api-spec}" \
+          -f openapi \
+          -r "/zap/wrk/zap-api-${TIMESTAMP}.html" \
+          -J "/zap/wrk/zap-api-${TIMESTAMP}.json" \
+          -l ${alert-threshold}
+        ;;
+    esac
+
+  post_execution: |
+    1. Parse JSON report for high/critical alerts
+    2. Map alerts to OWASP Top 10 categories
+    3. Verify false positives manually
+    4. Calculate CVSS scores for confirmed findings
+
+scan_type_guidance:
+  baseline: "Safe for CI/CD pipelines. Passive only — will not send attack payloads."
+  full: "Active scanning — WILL send attack payloads. Only on authorized targets with consent."
+  api: "API-focused scan. Requires OpenAPI/Swagger spec for best coverage."
+
+examples:
+  baseline_quick: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    scan-type: baseline
+    report-format: json
+
+  full_authenticated: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    scan-type: full
+    ajax-spider: true
+    auth-type: form
+    username: "testuser"
+    password: "testpassword"
+    max-duration: 120
+    report-format: html
+
+  api_scan: |
+    consent-token: ./consent-token.json
+    target: "https://target.example.com"
+    scan-type: api
+    api-spec: "./swagger.json"
+    report-format: sarif

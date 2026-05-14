@@ -6,9 +6,22 @@
 # Secrets
 config.yaml
 **/secrets/
+consent-token.json
+consent/consent-token.json
 
 # Reports output (templates kept, generated reports ignored)
 reports/output/
+*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
 
 # OS
 .DS_Store
@@ -21,3 +34,21 @@ Thumbs.db
 # Temp
 *.tmp
 *.log
+
+# Scan results (generated, not tracked)
+results/
+security-reports/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Generated files
+consent-token.json
+reports/output/
+*.pdf
+
+# Secrets
+config.yaml

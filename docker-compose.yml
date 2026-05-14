@@ -111,6 +111,94 @@ services:
     networks:
       - devsec
 
+  # ── Syft (SBOM Generator) ───────────────────────────────────────────────────
+  syft:
+    image: anchore/syft:latest
+    container_name: syft-sbom
+    command: ["--help"]          # Override at runtime
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── OSV-Scanner (Google OSV Database) ───────────────────────────────────────
+  osv-scanner:
+    image: ghcr.io/google/osv-scanner:latest
+    container_name: osv-scanner
+    command: ["--help"]          # Override at runtime
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── Nmap (Port & Vulnerability Scanner) ─────────────────────────────────────
+  nmap:
+    image: instrumentisto/nmap:latest
+    container_name: nmap-scanner
+    command: ["--version"]       # Override at runtime
+    volumes:
+      - reports:/reports
+    networks:
+      - devsec
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  # ── Nuclei (Web Vulnerability Scanner) ──────────────────────────────────────
+  nuclei:
+    image: projectdiscovery/nuclei:latest
+    container_name: nuclei-scanner
+    command: ["-version"]        # Override at runtime
+    environment:
+      - HOME=/root
+    volumes:
+      - reports:/reports
+      - nuclei-templates:/root/nuclei-templates  # Persist templates
+    networks:
+      - devsec
+    # Update templates on start:
+    # docker compose run nuclei -update-templates
+
+  # ── OWASP ZAP (Web App Security Scanner) ────────────────────────────────────
+  zaproxy:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: zap-scanner
+    # Daemon mode — use ZAP API or zap-baseline.py to trigger scans
+    command:
+      - zap.sh
+      - -daemon
+      - -host
+      - "0.0.0.0"
+      - -port
+      - "8090"
+      - -config
+      - api.disablekey=true
+    ports:
+      - "8090:8090"    # ZAP API port (internal use only — do not expose publicly)
+    volumes:
+      - reports:/zap/wrk
+      - zap-data:/home/zap/.ZAP
+    networks:
+      - devsec
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8090/JSON/core/view/version/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Nikto (Web Server Scanner) ───────────────────────────────────────────────
+  nikto:
+    image: frapsoft/nikto:latest
+    container_name: nikto-scanner
+    command: ["-Version"]        # Override at runtime
+    volumes:
+      - reports:/reports
+    networks:
+      - devsec
+
   # ── Report Aggregator ────────────────────────────────────────────────────────
   # Lightweight service to merge JSON reports and generate HTML summary
   report-aggregator:
@@ -152,6 +240,18 @@ volumes:
       o: bind
       device: ${REPORTS_PATH:-./security-reports}
 
+  # Consent documents (read-only for scanners)
+  consents:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${CONSENTS_PATH:-./consent}
+
+
   # Tool cache volumes (persist between runs for performance)
   grype-db:
   trivy-cache:
+  nuclei-templates:
+  zap-data:
+

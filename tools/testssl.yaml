@@ -1,0 +1,191 @@
+# tools/testssl.yaml — SSL/TLS Configuration Analyzer
+# CyberStrike DevSec — Level 2 Active Scan
+# WARNING: Only use against authorized targets.
+
+name: testssl
+description: |
+  Comprehensive SSL/TLS configuration analysis tool.
+  Tests for protocol versions, cipher suite weaknesses, certificate issues,
+  known vulnerabilities (POODLE, BEAST, HEARTBLEED, etc.), and HTTP security
+  headers delivered over HTTPS. Non-intrusive; safe for production targets.
+
+binary: testssl.sh
+version_check: "testssl.sh --version"
+fallback_binary: testssl
+
+parameters:
+  target:
+    description: |
+      Target host and optional port in format: hostname[:port]
+      Default port is 443 for HTTPS. Supports IP addresses.
+    type: string
+    required: true
+    example: "example.com:443"
+
+  checks:
+    description: |
+      Checks to perform (comma-separated or 'all'):
+        all              — Run all checks (default)
+        protocols        — Test SSL/TLS protocol versions
+        ciphers          — Enumerate supported cipher suites
+        headers          — HTTP security headers (HSTS, etc.)
+        vulnerabilities  — Test for known CVEs and attacks
+        certificates     — Certificate chain and expiry
+        client-simulation — Simulate various client handshakes
+      Recommended starting point: protocols,ciphers,vulnerabilities,certificates
+    type: string
+    default: "all"
+    required: false
+
+  output-format:
+    description: |
+      Output format for results:
+        json   — Machine-parseable JSON (--jsonfile)
+        csv    — CSV spreadsheet (--csvfile)
+        html   — HTML report (--htmlfile)
+        text   — Human-readable colored text (default stdout)
+    type: enum
+    values: [json, csv, html, text]
+    default: json
+    required: false
+
+  output-file:
+    description: Path to write output (without extension; testssl adds it)
+    type: string
+    required: false
+    example: "/tmp/testssl_results"
+
+  severity:
+    description: |
+      Minimum severity level to report (--severity):
+        LOW      — Low and above
+        MEDIUM   — Medium and above
+        HIGH     — High and above
+        CRITICAL — Critical only
+      Default: LOW to capture all relevant issues.
+    type: enum
+    values: [LOW, MEDIUM, HIGH, CRITICAL]
+    default: LOW
+    required: false
+
+  starttls-protocol:
+    description: |
+      For non-HTTPS services, use STARTTLS with the specified protocol
+      (--starttls <protocol>):
+        smtp  — SMTP STARTTLS
+        imap  — IMAP STARTTLS
+        pop3  — POP3 STARTTLS
+        ftp   — FTP AUTH TLS
+        xmpp  — XMPP STARTTLS
+        ldap  — LDAP STARTTLS
+        mysql — MySQL STARTTLS
+      Leave empty for standard HTTPS.
+    type: enum
+    values: [smtp, imap, pop3, ftp, xmpp, ldap, mysql]
+    required: false
+
+  no-color:
+    description: Disable ANSI colors in output (useful for log files)
+    type: boolean
+    default: false
+    required: false
+
+  quiet:
+    description: Suppress banner and informational messages (--quiet)
+    type: boolean
+    default: false
+    required: false
+
+  fast:
+    description: |
+      Skip cipher per-protocol checks (--fast). Faster but less thorough.
+      Not recommended for audit reports.
+    type: boolean
+    default: false
+    required: false
+
+  wide:
+    description: Wide output mode — more details per finding (--wide)
+    type: boolean
+    default: true
+    required: false
+
+  connection-timeout:
+    description: Timeout in seconds for each connection attempt (--connect-timeout)
+    type: integer
+    default: 30
+    required: false
+
+command_template: |
+  # Full scan with JSON output:
+  # testssl.sh --jsonfile=/tmp/testssl --severity=LOW example.com:443
+
+  # Specific checks only:
+  # testssl.sh --protocols --ciphers --vulnerable --jsonfile=/tmp/testssl example.com
+
+  testssl.sh \
+    {% if severity %}--severity={{ severity }}{% endif %} \
+    {% if no-color %}--color 0{% endif %} \
+    {% if quiet %}--quiet{% endif %} \
+    {% if fast %}--fast{% endif %} \
+    {% if wide %}--wide{% endif %} \
+    {% if connection-timeout %}--connect-timeout={{ connection-timeout }}{% endif %} \
+    {% if starttls-protocol %}--starttls {{ starttls-protocol }}{% endif %} \
+    {% if output-format == "json" and output-file %}--jsonfile={{ output-file }}{% endif %} \
+    {% if output-format == "csv" and output-file %}--csvfile={{ output-file }}{% endif %} \
+    {% if output-format == "html" and output-file %}--htmlfile={{ output-file }}{% endif %} \
+    {% if checks == "all" or not checks %}{% else %}
+      {% set check_map = {
+        "protocols": "--protocols",
+        "ciphers": "--cipher-per-proto",
+        "headers": "--headers",
+        "vulnerabilities": "--vulnerable",
+        "certificates": "--certificate"
+      } %}
+      {% for check in checks.split(',') %}{{ check_map[check.strip()] }} {% endfor %}
+    {% endif %} \
+    {{ target }}
+
+vulnerability_checks:
+  # These are automatically included in --vulnerable or full scan:
+  - HEARTBLEED      # CVE-2014-0160
+  - CCS_INJECTION   # CVE-2014-0224
+  - TICKETBLEED     # CVE-2016-9244
+  - ROBOT           # CVE-2017-13099
+  - SECURE_RENEGOTIATION
+  - CRIME           # CVE-2012-4929
+  - BREACH          # CVE-2013-3587
+  - POODLE          # CVE-2014-3566
+  - TLS_FALLBACK_SCSV
+  - SWEET32         # CVE-2016-2183
+  - FREAK           # CVE-2015-0204
+  - DROWN           # CVE-2016-0800
+  - LOGJAM          # CVE-2015-4000
+  - BEAST           # CVE-2011-3389
+  - LUCKY13         # CVE-2013-0169
+  - EFSS_LUCKY13
+  - RC4             # CVE-2013-2566
+
+output_schema:
+  id: string
+  ip: string
+  port: integer
+  protocol: string
+  findings:
+    - id: string
+      severity: "INFO|LOW|MEDIUM|HIGH|CRITICAL"
+      finding: string
+      cve: string
+      cwe: string
+
+notes:
+  - testssl.sh requires bash 3.2+ and several standard Unix utilities
+  - JSON output is ideal for integration with SIEM/reporting pipelines
+  - Certificate expiry warnings are always reported regardless of severity filter
+  - STARTTLS scanning covers mail servers and other non-HTTP TLS services
+  - Use --wide for audit reports to get full cipher suite names
+  - Pair with nmap SSL scripts for cross-validation
+
+authorization_reminder: |
+  ⚠️  LEGAL NOTICE: SSL/TLS scanning initiates real TLS handshakes with the
+  target server. Written authorization is required before execution.

@@ -1,0 +1,201 @@
+name: oauth-tester
+description: OAuth 2.0 vulnerability testing - open redirect, state CSRF, PKCE bypass, token leakage
+version: "1.0.0"
+security_tags:
+  requires_consent: true
+  level: 3
+
+consent_check:
+  description: >
+    MANDATORY: A valid consent-token.json must exist and be verified before execution.
+    Without a valid token, this tool MUST NOT execute.
+  token_file: "consent-token.json"
+  enforcement: blocking
+
+parameters:
+  authorization-url:
+    type: string
+    required: true
+    description: OAuth authorization endpoint URL
+
+  token-url:
+    type: string
+    required: true
+    description: OAuth token endpoint URL
+
+  client-id:
+    type: string
+    required: true
+    description: OAuth client_id value
+
+  redirect-uri:
+    type: string
+    required: true
+    description: Registered redirect URI
+
+  scope:
+    type: string
+    required: false
+    default: "openid profile email"
+    description: OAuth scope string
+
+  tests:
+    type: array
+    required: false
+    default:
+      - open-redirect
+      - state-csrf
+      - pkce-bypass
+      - token-leak
+    description: >
+      Tests to run:
+        - open-redirect: Test for open redirect in redirect_uri parameter
+        - state-csrf: Test for missing/weak state parameter (CSRF protection)
+        - pkce-bypass: Test for PKCE bypass (code_challenge_method=plain or absent)
+        - token-leak: Test for access token leakage in Referer/logs
+        - implicit-flow: Test for insecure implicit flow usage
+        - token-reuse: Test for authorization code reuse
+
+  attacker-redirect-uri:
+    type: string
+    required: false
+    default: "https://attacker.example.com/callback"
+    description: Attacker-controlled redirect URI for open redirect tests
+
+  output-dir:
+    type: string
+    required: false
+    default: "./oauth-results"
+    description: Directory to store results
+
+  consent-token:
+    type: string
+    required: true
+    description: Path to valid consent-token.json. REQUIRED.
+
+usage:
+  pre_execution: |
+    1. Verify consent-token.json
+    2. Review OAuth flow type (authorization code, implicit, client credentials)
+    3. Log test parameters to audit trail
+  test_procedures:
+    open-redirect: |
+      1. Replace redirect_uri with attacker URL (full replacement)
+      2. Try redirect_uri=https://legit.example.com.attacker.com/callback (subdomain bypass)
+      3. Try URL encoding: redirect_uri=https%3A%2F%2Fattacker.example.com
+      4. Try path traversal: redirect_uri=https://legit.example.com/../attacker.com
+      5. Check if server validates strictly or uses prefix matching
+    state-csrf: |
+      1. Initiate flow without state parameter → check if server rejects
+      2. Initiate flow with predictable state (e.g. "1234") → check if server validates
+      3. Replay state across sessions → check for fixation
+    pkce-bypass: |
+      1. Send authorization request without code_challenge → check if server requires it
+      2. Use code_challenge_method=plain → check if server enforces S256
+      3. Intercept and reuse authorization code without code_verifier
+    token-leak: |
+      1. Check if access_token appears in URL fragments
+      2. Check if authorization code appears in server logs via Referer header
+      3. Check response headers for token in WWW-Authenticate
+
+  command: |
+    # Consent verification
+    python3 -c "
+    import json, sys, datetime
+    try:
+        with open('${consent-token}') as f:
+            token = json.load(f)
+        assert token.get('valid') == True
+        expiry = datetime.datetime.fromisoformat(token['expires_at'])
+        assert expiry > datetime.datetime.utcnow(), 'Token expired'
+        print('[CONSENT] Token verified.')
+    except Exception as e:
+        print(f'[CONSENT ERROR] {e}')
+        sys.exit(1)
+    "
+
+    mkdir -p "${output-dir}"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    REPORT="${output-dir}/oauth-${TIMESTAMP}.json"
+
+    python3 << 'PYEOF'
+    import requests, json, urllib.parse, sys
+    from datetime import datetime
+
+    results = {"timestamp": datetime.utcnow().isoformat(), "findings": []}
+    auth_url = "${authorization-url}"
+    client_id = "${client-id}"
+    redirect_uri = "${redirect-uri}"
+    attacker_uri = "${attacker-redirect-uri}"
+    tests = ${tests}
+
+    session = requests.Session()
+
+    # Test: Open Redirect
+    if "open-redirect" in tests:
+        print("[*] Testing open redirect...")
+        bypass_uris = [
+            attacker_uri,
+            redirect_uri.rstrip('/') + "@attacker.example.com",
+            redirect_uri + "/../../../attacker.example.com",
+        ]
+        for test_uri in bypass_uris:
+            params = {"client_id": client_id, "redirect_uri": test_uri,
+                      "response_type": "code", "scope": "${scope}"}
+            r = session.get(auth_url, params=params, allow_redirects=False)
+            if r.status_code not in [400, 401, 403]:
+                results["findings"].append({
+                    "type": "open-redirect",
+                    "severity": "High",
+                    "evidence": f"Server accepted redirect_uri: {test_uri}",
+                    "status_code": r.status_code
+                })
+
+    # Test: State CSRF
+    if "state-csrf" in tests:
+        print("[*] Testing state parameter...")
+        params = {"client_id": client_id, "redirect_uri": redirect_uri,
+                  "response_type": "code", "scope": "${scope}"}
+        r = session.get(auth_url, params=params, allow_redirects=False)
+        if r.status_code == 302:
+            results["findings"].append({
+                "type": "state-csrf",
+                "severity": "Medium",
+                "evidence": "Server initiated OAuth flow without state parameter"
+            })
+
+    # Test: PKCE bypass
+    if "pkce-bypass" in tests:
+        print("[*] Testing PKCE requirements...")
+        params = {"client_id": client_id, "redirect_uri": redirect_uri,
+                  "response_type": "code", "scope": "${scope}",
+                  "code_challenge_method": "plain", "code_challenge": "dGVzdA"}
+        r = session.get(auth_url, params=params, allow_redirects=False)
+        if r.status_code not in [400, 422]:
+            results["findings"].append({
+                "type": "pkce-bypass",
+                "severity": "Medium",
+                "evidence": "Server accepted code_challenge_method=plain"
+            })
+
+    with open("${REPORT}", "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"[*] Results written to ${REPORT}")
+    print(f"[*] Findings: {len(results['findings'])}")
+    for f in results['findings']:
+        print(f"  [{f['severity']}] {f['type']}: {f['evidence']}")
+    PYEOF
+
+  post_execution: |
+    1. Verify each finding manually
+    2. Attempt full account takeover chain where applicable
+    3. Document complete attack chain for report
+
+examples:
+  full_test: |
+    consent-token: ./consent-token.json
+    authorization-url: "https://target.example.com/oauth/authorize"
+    token-url: "https://target.example.com/oauth/token"
+    client-id: "test-client"
+    redirect-uri: "https://target.example.com/callback"
+    tests: [open-redirect, state-csrf, pkce-bypass, token-leak]
