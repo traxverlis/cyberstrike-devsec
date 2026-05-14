@@ -1,0 +1,113 @@
+name: "trivy"
+command: "trivy"
+enabled: true
+short_description: "Universal vulnerability and misconfiguration scanner"
+description: |
+  Trivy is a comprehensive, all-in-one security scanner by Aqua Security. It detects
+  vulnerabilities in OS packages and application dependencies, exposed secrets, IaC
+  misconfigurations, and SBOM data. It supports scanning filesystems, container images,
+  Git repositories, and Kubernetes clusters. Trivy integrates with CI/CD pipelines via
+  exit codes and multiple output formats including SARIF for GitHub/GitLab integration.
+parameters:
+  - name: "scan-type"
+    type: "string"
+    description: "Type of scan to perform"
+    required: true
+    format: "positional"
+    position: 0
+    options: ["fs", "image", "repo", "config", "sbom", "k8s", "rootfs"]
+
+  - name: "target"
+    type: "string"
+    description: "Scan target: filesystem path, image name, repository URL, or config path"
+    required: true
+    format: "positional"
+    position: 1
+
+  - name: "severity"
+    type: "string"
+    description: "Severities of vulnerabilities to display (comma-separated)"
+    required: false
+    flag: "--severity"
+    format: "flag"
+    default: "CRITICAL,HIGH"
+    options: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+
+  - name: "format"
+    type: "string"
+    description: "Output format for scan results"
+    required: false
+    flag: "--format"
+    format: "flag"
+    default: "table"
+    options: ["table", "json", "sarif", "cyclonedx", "spdx", "spdx-json", "github", "cosign-vuln"]
+
+  - name: "exit-code"
+    type: "integer"
+    description: "Exit code when vulnerabilities are found (useful for CI/CD fail gates)"
+    required: false
+    flag: "--exit-code"
+    format: "flag"
+    default: 0
+
+  - name: "ignore-unfixed"
+    type: "boolean"
+    description: "Display only fixed vulnerabilities, ignore unfixed ones"
+    required: false
+    flag: "--ignore-unfixed"
+    format: "flag"
+    default: false
+
+  - name: "scanners"
+    type: "string"
+    description: "Comma-separated list of scanners to enable"
+    required: false
+    flag: "--scanners"
+    format: "flag"
+    default: "vuln"
+    options: ["vuln", "secret", "config", "license"]
+
+  - name: "output"
+    type: "string"
+    description: "Output file path for scan results"
+    required: false
+    flag: "--output"
+    format: "flag"
+
+  - name: "skip-dirs"
+    type: "string"
+    description: "Comma-separated list of directories to skip during scan"
+    required: false
+    flag: "--skip-dirs"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to a Trivy config file (trivy.yaml)"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "db-repository"
+    type: "string"
+    description: "OCI repository to retrieve the Trivy vulnerability database from"
+    required: false
+    flag: "--db-repository"
+    format: "flag"
+
+  - name: "offline-scan"
+    type: "boolean"
+    description: "Do not issue API requests to identify dependencies (offline mode)"
+    required: false
+    flag: "--offline-scan"
+    format: "flag"
+    default: false
+
+  - name: "vuln-type"
+    type: "string"
+    description: "Comma-separated list of vulnerability types to scan for"
+    required: false
+    flag: "--vuln-type"
+    format: "flag"
+    default: "os,library"
+    options: ["os", "library"]

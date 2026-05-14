@@ -1,0 +1,71 @@
+name: "dotnet-audit"
+command: "dotnet"
+enabled: true
+short_description: "Vulnerability scanner for NuGet packages in .NET projects"
+description: |
+  The 'dotnet list package --vulnerable' command audits NuGet package dependencies in
+  .NET projects and solutions against the GitHub Advisory Database and NuGet.org advisories.
+  It detects known CVEs in direct and transitive NuGet package references for C#, F#, and
+  VB.NET projects. Useful for supply chain security in .NET/ASP.NET applications.
+  Run from the project or solution directory containing a .csproj or .sln file.
+parameters:
+  - name: "project-path"
+    type: "string"
+    description: "Path to the .NET project directory, .csproj file, or .sln solution file to audit"
+    required: true
+    format: "positional"
+    position: 0
+
+  - name: "vulnerable"
+    type: "boolean"
+    description: "List only packages with known vulnerabilities (required flag for audit)"
+    required: false
+    flag: "--vulnerable"
+    format: "flag"
+    default: true
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for the audit results"
+    required: false
+    flag: "--format"
+    format: "flag"
+    default: "text"
+    options: ["json", "text"]
+
+  - name: "severity"
+    type: "string"
+    description: "Minimum severity level to report (filters results)"
+    required: false
+    flag: "--highest-patch"
+    format: "flag"
+    options: ["low", "moderate", "high", "critical"]
+
+  - name: "include-transitive"
+    type: "boolean"
+    description: "Include transitive (indirect) package dependencies in the vulnerability scan"
+    required: false
+    flag: "--include-transitive"
+    format: "flag"
+    default: false
+
+  - name: "framework"
+    type: "string"
+    description: "Target framework to audit (e.g. net8.0, netstandard2.0)"
+    required: false
+    flag: "--framework"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to the NuGet.Config file to use for package sources"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "source"
+    type: "string"
+    description: "NuGet package source URI to use for advisory lookups"
+    required: false
+    flag: "--source"
+    format: "flag"

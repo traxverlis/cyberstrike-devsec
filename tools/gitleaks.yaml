@@ -1,0 +1,103 @@
+name: "gitleaks"
+command: "gitleaks"
+enabled: true
+short_description: "Secret detection tool for Git repositories and source code"
+description: |
+  Gitleaks is an open-source SAST tool for detecting hardcoded secrets like passwords, API keys,
+  and tokens in Git repositories and source code. It scans the entire commit history, specific
+  branches, or the working directory for patterns matching known secret formats (AWS keys,
+  GitHub tokens, private keys, etc.). Supports custom rules via TOML configuration.
+  Commonly used as a pre-commit hook or in CI/CD pipelines.
+parameters:
+  - name: "scan-type"
+    type: "string"
+    description: "Scan mode: 'detect' scans a repo/directory, 'protect' checks staged changes, 'git' scans git history"
+    required: true
+    format: "positional"
+    position: 0
+    options: ["detect", "protect", "git"]
+
+  - name: "source"
+    type: "string"
+    description: "Path to the repository or directory to scan"
+    required: false
+    flag: "--source"
+    format: "flag"
+    default: "."
+
+  - name: "report-format"
+    type: "string"
+    description: "Output format for the findings report"
+    required: false
+    flag: "--report-format"
+    format: "flag"
+    default: "json"
+    options: ["json", "csv", "sarif", "junit-xml"]
+
+  - name: "report-path"
+    type: "string"
+    description: "File path to write the report output to"
+    required: false
+    flag: "--report-path"
+    format: "flag"
+
+  - name: "verbose"
+    type: "boolean"
+    description: "Show verbose output including all scanned commits and files"
+    required: false
+    flag: "--verbose"
+    format: "flag"
+    default: false
+
+  - name: "redact"
+    type: "boolean"
+    description: "Redact secrets from log messages and report output"
+    required: false
+    flag: "--redact"
+    format: "flag"
+    default: false
+
+  - name: "branch"
+    type: "string"
+    description: "Branch to scan when using git history scan mode"
+    required: false
+    flag: "--branch"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to a custom Gitleaks TOML configuration file"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "exit-code"
+    type: "integer"
+    description: "Exit code when leaks have been detected (default: 1)"
+    required: false
+    flag: "--exit-code"
+    format: "flag"
+    default: 1
+
+  - name: "max-decode-depth"
+    type: "integer"
+    description: "Maximum depth to decode base64/URL encoded values when searching for secrets"
+    required: false
+    flag: "--max-decode-depth"
+    format: "flag"
+    default: 0
+
+  - name: "log-opts"
+    type: "string"
+    description: "Additional git log options (e.g. '--since=2022-01-01')"
+    required: false
+    flag: "--log-opts"
+    format: "flag"
+
+  - name: "no-banner"
+    type: "boolean"
+    description: "Suppress the Gitleaks banner in output"
+    required: false
+    flag: "--no-banner"
+    format: "flag"
+    default: false

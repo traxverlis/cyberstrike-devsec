@@ -1,0 +1,87 @@
+name: "osv-scanner"
+command: "osv-scanner"
+enabled: true
+short_description: "Google OSV-Scanner — vulnerability scanner using the OSV advisory database"
+description: |
+  OSV-Scanner is Google's open-source vulnerability scanner that checks project
+  dependencies against the OSV (Open Source Vulnerabilities) database, which aggregates
+  advisories from GitHub, NVD, PyPI, npm, Go, crates.io, and many more ecosystems.
+  It supports scanning lockfiles, SBOMs, directories, and can perform call-graph analysis
+  to identify whether vulnerable code paths are actually reachable in your project.
+  Outputs clean JSON or table results suitable for CI/CD integration.
+parameters:
+  - name: "target-dir"
+    type: "string"
+    description: "Path to the directory to scan recursively for lockfiles and manifests"
+    required: false
+    flag: "--recursive"
+    format: "flag"
+
+  - name: "lockfile"
+    type: "string"
+    description: "Path to a specific lockfile to scan (e.g. package-lock.json, Pipfile.lock)"
+    required: false
+    flag: "--lockfile"
+    format: "flag"
+
+  - name: "call-analysis"
+    type: "boolean"
+    description: "Enable call-graph analysis to determine if vulnerable functions are actually called (Go and Java)"
+    required: false
+    flag: "--experimental-call-analysis"
+    format: "flag"
+    default: false
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for scan results"
+    required: false
+    flag: "--format"
+    format: "flag"
+    default: "table"
+    options: ["table", "json", "sarif", "gh-annotations", "cyclonedx-1-4", "cyclonedx-1-5"]
+
+  - name: "skip-git"
+    type: "boolean"
+    description: "Skip scanning git repository commit history for vulnerabilities"
+    required: false
+    flag: "--skip-git"
+    format: "flag"
+    default: false
+
+  - name: "sbom"
+    type: "string"
+    description: "Path to an SBOM file (CycloneDX or SPDX) to scan for vulnerabilities"
+    required: false
+    flag: "--sbom"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to a custom OSV-Scanner config file for ignoring specific vulnerabilities"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "output"
+    type: "string"
+    description: "File path to write scan results to (default: stdout)"
+    required: false
+    flag: "--output"
+    format: "flag"
+
+  - name: "verbosity"
+    type: "integer"
+    description: "Verbosity level for scan output (1=error, 2=warn, 3=info, 4=debug)"
+    required: false
+    flag: "--verbosity"
+    format: "flag"
+    default: 2
+
+  - name: "no-ignore"
+    type: "boolean"
+    description: "Disable ignoring vulnerabilities listed in the config file"
+    required: false
+    flag: "--no-ignore"
+    format: "flag"
+    default: false

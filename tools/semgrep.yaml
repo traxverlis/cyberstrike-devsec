@@ -1,0 +1,98 @@
+name: "semgrep"
+command: "semgrep"
+enabled: true
+short_description: "Static analysis tool for finding bugs and OWASP security issues"
+description: |
+  Semgrep is a fast, open-source static analysis tool that supports 30+ languages.
+  It uses pattern-matching rules to find security vulnerabilities, bugs, and code
+  quality issues. The Semgrep registry includes curated rule packs for OWASP Top 10,
+  CWE Top 25, secret detection, and language-specific security best practices.
+  Semgrep integrates into CI/CD pipelines and outputs SARIF for GitHub Advanced Security.
+parameters:
+  - name: "config"
+    type: "string"
+    description: "Semgrep rule set to use. Can be a registry pack (p/owasp-top-ten), local file, or 'auto'"
+    required: true
+    flag: "--config"
+    format: "flag"
+    default: "auto"
+    options: ["auto", "p/owasp-top-ten", "p/cwe-top-25", "p/secrets", "p/ci", "p/security-audit", "p/nodejs", "p/python", "p/java", "p/dotnet"]
+
+  - name: "target-path"
+    type: "string"
+    description: "Path to the file or directory to scan"
+    required: true
+    format: "positional"
+    position: 0
+
+  - name: "lang"
+    type: "string"
+    description: "Parse target as this language. Must be used if scanning a code snippet"
+    required: false
+    flag: "--lang"
+    format: "flag"
+    options: ["python", "javascript", "typescript", "java", "go", "ruby", "php", "c", "cpp", "csharp", "rust", "kotlin", "scala"]
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for scan results"
+    required: false
+    flag: "--output-format"
+    format: "flag"
+    default: "text"
+    options: ["text", "json", "sarif", "gitlab-sast", "junit-xml", "emacs", "vim"]
+
+  - name: "severity"
+    type: "string"
+    description: "Report findings only at or above this severity level"
+    required: false
+    flag: "--severity"
+    format: "flag"
+    options: ["INFO", "WARNING", "ERROR"]
+
+  - name: "exclude"
+    type: "string"
+    description: "Comma-separated list of glob patterns for paths to exclude from scanning"
+    required: false
+    flag: "--exclude"
+    format: "flag"
+
+  - name: "max-target-bytes"
+    type: "integer"
+    description: "Maximum size of the target in bytes to scan (default: 1MB)"
+    required: false
+    flag: "--max-target-bytes"
+    format: "flag"
+    default: 1000000
+
+  - name: "output"
+    type: "string"
+    description: "Save results to this file (default: stdout)"
+    required: false
+    flag: "--output"
+    format: "flag"
+
+  - name: "error"
+    type: "boolean"
+    description: "Exit with non-zero code if findings are found (useful for CI gates)"
+    required: false
+    flag: "--error"
+    format: "flag"
+    default: false
+
+  - name: "no-git-ignore"
+    type: "boolean"
+    description: "Do not use .gitignore files when filtering scan targets"
+    required: false
+    flag: "--no-git-ignore"
+    format: "flag"
+    default: false
+
+  - name: "metrics"
+    type: "string"
+    description: "Configure metrics collection (auto/on/off)"
+    required: false
+    flag: "--metrics"
+    format: "flag"
+    default: "auto"
+    options: ["auto", "on", "off"]

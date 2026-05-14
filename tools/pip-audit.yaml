@@ -1,0 +1,88 @@
+name: "pip-audit"
+command: "pip-audit"
+enabled: true
+short_description: "Vulnerability scanner for Python package dependencies"
+description: |
+  pip-audit is an open-source tool by PyPA for auditing Python environments and
+  requirements files against known vulnerability databases (OSV, PyPI Advisory DB).
+  It scans installed packages or requirements.txt files for CVEs and security advisories,
+  and can optionally apply automatic fixes by upgrading vulnerable packages.
+  Supports multiple output formats for CI/CD integration and security reporting.
+parameters:
+  - name: "project-path"
+    type: "string"
+    description: "Path to the Python project directory to audit (scans installed environment if not using -r)"
+    required: false
+    format: "positional"
+    position: 0
+
+  - name: "requirement-file"
+    type: "string"
+    description: "Path to a requirements.txt file to audit instead of the installed environment"
+    required: false
+    flag: "--requirement"
+    format: "flag"
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for audit results"
+    required: false
+    flag: "--format"
+    format: "flag"
+    default: "columns"
+    options: ["json", "columns", "cyclonedx-json", "cyclonedx-xml"]
+
+  - name: "vulnerability-service"
+    type: "string"
+    description: "Vulnerability database service to use for lookups"
+    required: false
+    flag: "--vulnerability-service"
+    format: "flag"
+    default: "osv"
+    options: ["osv", "pypi"]
+
+  - name: "fix"
+    type: "boolean"
+    description: "Automatically upgrade vulnerable packages to the nearest non-vulnerable version"
+    required: false
+    flag: "--fix"
+    format: "flag"
+    default: false
+
+  - name: "output"
+    type: "string"
+    description: "File path to write the audit results to"
+    required: false
+    flag: "--output"
+    format: "flag"
+
+  - name: "ignore-vuln"
+    type: "string"
+    description: "Vulnerability ID to ignore (can be repeated; e.g. GHSA-xxxx-xxxx-xxxx)"
+    required: false
+    flag: "--ignore-vuln"
+    format: "flag"
+
+  - name: "skip-editable"
+    type: "boolean"
+    description: "Skip editable installs (packages installed with pip install -e)"
+    required: false
+    flag: "--skip-editable"
+    format: "flag"
+    default: false
+
+  - name: "strict"
+    type: "boolean"
+    description: "Exit with a non-zero code if any vulnerabilities are found"
+    required: false
+    flag: "--strict"
+    format: "flag"
+    default: false
+
+  - name: "desc"
+    type: "boolean"
+    description: "Include vulnerability descriptions in the output"
+    required: false
+    flag: "--desc"
+    format: "flag"
+    default: false

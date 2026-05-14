@@ -1,0 +1,124 @@
+name: "checkov"
+command: "checkov"
+enabled: true
+short_description: "Infrastructure-as-Code (IaC) security scanner for Terraform, Dockerfile, Kubernetes, and more"
+description: |
+  Checkov is an open-source static analysis tool by Bridgecrew (Prisma Cloud) for
+  Infrastructure-as-Code security scanning. It supports 1000+ built-in security and
+  compliance checks across Terraform, Terraform Plan, Dockerfile, Docker Compose,
+  Kubernetes, Helm, CloudFormation, Azure ARM Templates, Bicep, GitHub Actions, and
+  Ansible. Checkov maps findings to CIS Benchmarks, NIST 800-53, PCI-DSS, SOC2, HIPAA,
+  and ISO 27001. Outputs SARIF for GitHub Security tab integration.
+parameters:
+  - name: "directory"
+    type: "string"
+    description: "Root directory to scan recursively for IaC files"
+    required: false
+    flag: "--directory"
+    format: "flag"
+    default: "."
+
+  - name: "file"
+    type: "string"
+    description: "Path to a specific IaC file to scan (instead of a directory)"
+    required: false
+    flag: "--file"
+    format: "flag"
+
+  - name: "framework"
+    type: "string"
+    description: "IaC framework(s) to scan (comma-separated for multiple)"
+    required: false
+    flag: "--framework"
+    format: "flag"
+    options: ["terraform", "terraform_plan", "cloudformation", "kubernetes", "helm", "dockerfile", "docker_compose", "github_actions", "ansible", "arm", "bicep", "all"]
+    default: "all"
+
+  - name: "output"
+    type: "string"
+    description: "Output format for scan results"
+    required: false
+    flag: "--output"
+    format: "flag"
+    default: "cli"
+    options: ["cli", "json", "junitxml", "github_failed_only", "sarif", "cyclonedx", "csv", "spdx"]
+
+  - name: "output-file-path"
+    type: "string"
+    description: "File path to write output to (default: stdout)"
+    required: false
+    flag: "--output-file-path"
+    format: "flag"
+
+  - name: "check"
+    type: "string"
+    description: "Run only specific check IDs (comma-separated, e.g. CKV_AWS_1,CKV_DOCKER_2)"
+    required: false
+    flag: "--check"
+    format: "flag"
+
+  - name: "skip-check"
+    type: "string"
+    description: "Skip specific check IDs (comma-separated). Use for accepted risks or false positives"
+    required: false
+    flag: "--skip-check"
+    format: "flag"
+
+  - name: "compact"
+    type: "boolean"
+    description: "Display compact output — show only failed checks (no passed)"
+    required: false
+    flag: "--compact"
+    format: "flag"
+    default: false
+
+  - name: "quiet"
+    type: "boolean"
+    description: "Output only failed checks (suppress passed checks and summary)"
+    required: false
+    flag: "--quiet"
+    format: "flag"
+    default: false
+
+  - name: "soft-fail"
+    type: "boolean"
+    description: "Exit with code 0 even if checks fail (do not block CI pipeline)"
+    required: false
+    flag: "--soft-fail"
+    format: "flag"
+    default: false
+
+  - name: "hard-fail-on"
+    type: "string"
+    description: "Exit with non-zero code only if specific check IDs fail"
+    required: false
+    flag: "--hard-fail-on"
+    format: "flag"
+
+  - name: "external-checks-dir"
+    type: "string"
+    description: "Directory containing custom Checkov check definitions (Python files)"
+    required: false
+    flag: "--external-checks-dir"
+    format: "flag"
+
+  - name: "config-file"
+    type: "string"
+    description: "Path to a .checkov.yaml configuration file"
+    required: false
+    flag: "--config-file"
+    format: "flag"
+
+  - name: "var-file"
+    type: "string"
+    description: "Path to a Terraform variable file (.tfvars) for plan evaluation"
+    required: false
+    flag: "--var-file"
+    format: "flag"
+
+  - name: "repo-root-for-plan-enrichment"
+    type: "string"
+    description: "Directory containing Terraform source for plan enrichment context"
+    required: false
+    flag: "--repo-root-for-plan-enrichment"
+    format: "flag"

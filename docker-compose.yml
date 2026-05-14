@@ -1,0 +1,157 @@
+version: "3.9"
+
+# CyberStrikeAI DevSec — Docker Compose Environment
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose run scanner grype dir:/workspace --severity high
+#   docker compose down           # Stop all services
+
+services:
+  # ── CyberStrikeAI ───────────────────────────────────────────────────────────
+  cyberstrike:
+    image: cyberstrike/cyberstrike-ai:latest
+    # Build locally if official image is not yet available:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.cyberstrike
+    container_name: cyberstrike-ai
+    restart: unless-stopped
+    environment:
+      - NVD_API_KEY=${NVD_API_KEY}
+      - CYBERSTRIKE_LICENSE=${CYBERSTRIKE_LICENSE}
+      - CYBERSTRIKE_CONFIG=/config/config.yaml
+    volumes:
+      - ./config:/config:ro
+      - workspace:/workspace
+      - reports:/reports
+    ports:
+      - "8080:8080"    # Web UI (if available)
+    networks:
+      - devsec
+    healthcheck:
+      test: ["CMD", "cyberstrike", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── Grype (CVE Scanner) ─────────────────────────────────────────────────────
+  grype:
+    image: anchore/grype:latest
+    container_name: grype-scanner
+    command: ["--help"]          # Override at runtime: docker compose run grype dir:/workspace
+    environment:
+      - GRYPE_DB_AUTO_UPDATE=true
+      - GRYPE_DB_UPDATE_URL=https://toolbox-data.anchore.io/grype/databases/listing.json
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+      - grype-db:/home/nonroot/.cache/grype   # Persist DB cache
+    networks:
+      - devsec
+
+  # ── Trivy (Multi-target Scanner) ────────────────────────────────────────────
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: trivy-scanner
+    command: ["--help"]          # Override at runtime
+    environment:
+      - TRIVY_NO_PROGRESS=true
+      - TRIVY_CACHE_DIR=/trivy-cache
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+      - trivy-cache:/trivy-cache  # Persist vulnerability DB cache
+    networks:
+      - devsec
+
+  # ── Semgrep (SAST) ──────────────────────────────────────────────────────────
+  semgrep:
+    image: semgrep/semgrep:latest
+    container_name: semgrep-scanner
+    command: ["--help"]          # Override at runtime
+    environment:
+      - SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN:-}
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── Gitleaks (Secret Scanner) ───────────────────────────────────────────────
+  gitleaks:
+    image: zricethezav/gitleaks:latest
+    container_name: gitleaks-scanner
+    command: ["--help"]          # Override at runtime
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── Syft (SBOM Generator) ───────────────────────────────────────────────────
+  syft:
+    image: anchore/syft:latest
+    container_name: syft-sbom
+    command: ["--help"]          # Override at runtime
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── OSV-Scanner (Google OSV Database) ───────────────────────────────────────
+  osv-scanner:
+    image: ghcr.io/google/osv-scanner:latest
+    container_name: osv-scanner
+    command: ["--help"]          # Override at runtime
+    volumes:
+      - workspace:/workspace:ro
+      - reports:/reports
+    networks:
+      - devsec
+
+  # ── Report Aggregator ────────────────────────────────────────────────────────
+  # Lightweight service to merge JSON reports and generate HTML summary
+  report-aggregator:
+    image: alpine:latest
+    container_name: report-aggregator
+    command: >
+      sh -c "
+        apk add --no-cache jq &&
+        echo 'Report aggregator ready. Run: docker compose run report-aggregator sh' &&
+        tail -f /dev/null
+      "
+    volumes:
+      - reports:/reports
+      - ./scripts:/scripts:ro
+    networks:
+      - devsec
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  devsec:
+    driver: bridge
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  # Shared workspace — mount your project here
+  # docker compose run -v /path/to/your/project:/workspace/project grype dir:/workspace/project
+  workspace:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PROJECT_PATH:-.}   # Default to current directory
+
+  # Shared reports output directory
+  reports:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${REPORTS_PATH:-./security-reports}
+
+  # Tool cache volumes (persist between runs for performance)
+  grype-db:
+  trivy-cache:

@@ -1,0 +1,79 @@
+name: "dotnet-vulnerable"
+command: "dotnet"
+enabled: true
+short_description: "Audit NuGet package dependencies for known vulnerabilities using dotnet list package --vulnerable"
+description: |
+  The 'dotnet list package --vulnerable' command queries NuGet.org and GitHub Advisory
+  Database to identify packages with known CVEs or security advisories. It supports
+  both direct and transitive dependency scanning, and can output results as JSON for
+  CI/CD pipeline integration. Must be run from a directory containing a .csproj or .sln
+  file with packages already restored.
+parameters:
+  - name: "subcommand"
+    type: "string"
+    description: "The dotnet CLI subcommand chain to run (must be 'list package')"
+    required: true
+    format: "positional"
+    position: 0
+    default: "list package"
+
+  - name: "project-path"
+    type: "string"
+    description: "Path to the .csproj file, .sln solution file, or project directory"
+    required: false
+    format: "positional"
+    position: 1
+
+  - name: "vulnerable"
+    type: "boolean"
+    description: "Filter output to only show packages with known vulnerabilities (required for audit)"
+    required: false
+    flag: "--vulnerable"
+    format: "flag"
+    default: true
+
+  - name: "include-transitive"
+    type: "boolean"
+    description: "Include transitive (indirect) package dependencies in the vulnerability scan"
+    required: false
+    flag: "--include-transitive"
+    format: "flag"
+    default: false
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for vulnerability results"
+    required: false
+    flag: "--format"
+    format: "flag"
+    default: "text"
+    options: ["json", "text"]
+
+  - name: "framework"
+    type: "string"
+    description: "Target framework to audit (e.g. net8.0, netstandard2.0, net48)"
+    required: false
+    flag: "--framework"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to the NuGet.Config file to use for package source configuration"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "source"
+    type: "string"
+    description: "NuGet package source URI to include for advisory lookups"
+    required: false
+    flag: "--source"
+    format: "flag"
+
+  - name: "interactive"
+    type: "boolean"
+    description: "Allow interactive prompts for authentication to package sources"
+    required: false
+    flag: "--interactive"
+    format: "flag"
+    default: false

@@ -1,0 +1,87 @@
+name: "maven-dependency-check"
+command: "mvn"
+enabled: true
+short_description: "OWASP Dependency-Check for Maven/Java projects — CVE scanning for JAR dependencies"
+description: |
+  OWASP Dependency-Check is a software composition analysis (SCA) tool that identifies
+  known vulnerabilities in Java project dependencies by checking against the NVD (National
+  Vulnerability Database) and other advisories. Integrates with Maven via the
+  org.owasp:dependency-check-maven plugin. Scans .jar, .war, .ear files and transitive
+  dependencies, producing detailed reports with CVE IDs, CVSS scores, and remediation guidance.
+parameters:
+  - name: "project-path"
+    type: "string"
+    description: "Path to the Maven project directory containing pom.xml"
+    required: true
+    flag: "-f"
+    format: "flag"
+
+  - name: "goal"
+    type: "string"
+    description: "Maven goal to execute for dependency check"
+    required: false
+    format: "positional"
+    position: 0
+    default: "org.owasp:dependency-check-maven:check"
+
+  - name: "format"
+    type: "string"
+    description: "Output report format(s), comma-separated"
+    required: false
+    flag: "-Dformat"
+    format: "flag"
+    default: "HTML"
+    options: ["JSON", "HTML", "XML", "SARIF", "CSV", "JUNIT", "ALL"]
+
+  - name: "failOnCVSS"
+    type: "number"
+    description: "CVSS score threshold — fail the build if any vulnerability meets or exceeds this score (0-10)"
+    required: false
+    flag: "-DfailBuildOnCVSS"
+    format: "flag"
+    default: 8.0
+
+  - name: "suppression-file"
+    type: "string"
+    description: "Path to an XML suppression file to suppress false positive findings"
+    required: false
+    flag: "-DsuppressionFile"
+    format: "flag"
+
+  - name: "nvd-api-key"
+    type: "string"
+    description: "NVD API key for higher-rate database updates (recommended for CI/CD use)"
+    required: false
+    flag: "-DnvdApiKey"
+    format: "flag"
+
+  - name: "output-directory"
+    type: "string"
+    description: "Directory path where reports will be written"
+    required: false
+    flag: "-DoutputDirectory"
+    format: "flag"
+    default: "target/dependency-check-report"
+
+  - name: "skip-test-scope"
+    type: "boolean"
+    description: "Skip scanning test-scoped dependencies"
+    required: false
+    flag: "-DskipTestScope"
+    format: "flag"
+    default: true
+
+  - name: "auto-update"
+    type: "boolean"
+    description: "Automatically update the NVD vulnerability database before scanning"
+    required: false
+    flag: "-DautoUpdate"
+    format: "flag"
+    default: true
+
+  - name: "data-directory"
+    type: "string"
+    description: "Directory to store the NVD database cache (useful for offline/CI use)"
+    required: false
+    flag: "-DdataDirectory"
+    format: "flag"

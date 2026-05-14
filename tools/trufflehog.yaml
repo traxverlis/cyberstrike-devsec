@@ -1,0 +1,109 @@
+name: "trufflehog"
+command: "trufflehog"
+enabled: true
+short_description: "Deep secret scanning with entropy analysis and credential verification"
+description: |
+  TruffleHog is an advanced secret scanning tool that uses both regex pattern matching
+  and Shannon entropy analysis to detect high-entropy strings (likely API keys, tokens,
+  passwords) in Git repositories, filesystems, S3 buckets, Docker images, and CI/CD
+  configurations. Unlike Gitleaks, TruffleHog can optionally verify found secrets against
+  their respective APIs to confirm they are still active. Supports 800+ secret detectors
+  covering AWS, GCP, Azure, GitHub, Slack, Stripe, and many more services.
+parameters:
+  - name: "scan-mode"
+    type: "string"
+    description: "Scan mode / source type to analyze"
+    required: true
+    format: "positional"
+    position: 0
+    options: ["git", "github", "gitlab", "filesystem", "s3", "gcs", "docker", "circleci", "jenkins", "travisci"]
+
+  - name: "target"
+    type: "string"
+    description: "Target to scan: file:// URI for local git repo, https:// URL for remote repos, path for filesystem"
+    required: true
+    format: "positional"
+    position: 1
+
+  - name: "json"
+    type: "boolean"
+    description: "Output results as JSON (one JSON object per line — NDJSON format)"
+    required: false
+    flag: "--json"
+    format: "flag"
+    default: false
+
+  - name: "no-verification"
+    type: "boolean"
+    description: "Skip live verification of found secrets against external APIs (faster, fewer network calls)"
+    required: false
+    flag: "--no-verification"
+    format: "flag"
+    default: false
+
+  - name: "only-verified"
+    type: "boolean"
+    description: "Only report secrets that have been successfully verified as active/valid"
+    required: false
+    flag: "--only-verified"
+    format: "flag"
+    default: false
+
+  - name: "branch"
+    type: "string"
+    description: "Git branch to scan (default: scans all branches)"
+    required: false
+    flag: "--branch"
+    format: "flag"
+
+  - name: "since-commit"
+    type: "string"
+    description: "Scan only commits after this commit SHA (for incremental scans)"
+    required: false
+    flag: "--since-commit"
+    format: "flag"
+
+  - name: "max-depth"
+    type: "integer"
+    description: "Maximum number of commits to scan from HEAD (limits scan depth for performance)"
+    required: false
+    flag: "--max-depth"
+    format: "flag"
+
+  - name: "allow-verification-overlap"
+    type: "boolean"
+    description: "Allow multiple detectors to verify the same credential"
+    required: false
+    flag: "--allow-verification-overlap"
+    format: "flag"
+    default: false
+
+  - name: "concurrency"
+    type: "integer"
+    description: "Number of concurrent workers for scanning (default: number of CPU cores)"
+    required: false
+    flag: "--concurrency"
+    format: "flag"
+
+  - name: "log-level"
+    type: "string"
+    description: "Logging verbosity level"
+    required: false
+    flag: "--log-level"
+    format: "flag"
+    default: "info"
+    options: ["trace", "debug", "info", "warn", "error"]
+
+  - name: "exclude-detectors"
+    type: "string"
+    description: "Comma-separated list of detector names to exclude from scanning"
+    required: false
+    flag: "--exclude-detectors"
+    format: "flag"
+
+  - name: "include-detectors"
+    type: "string"
+    description: "Comma-separated list of specific detector names to include (whitelist mode)"
+    required: false
+    flag: "--include-detectors"
+    format: "flag"

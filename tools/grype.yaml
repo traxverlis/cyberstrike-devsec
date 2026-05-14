@@ -1,0 +1,88 @@
+name: "grype"
+command: "grype"
+enabled: true
+short_description: "CVE vulnerability scanner for container images, directories, and SBOMs"
+description: |
+  Grype is a vulnerability scanner for container images, filesystems, directories, and SBOMs
+  produced by Anchore. It supports scanning against multiple vulnerability databases including
+  NVD, GitHub Advisory, and OS-specific feeds. Grype can parse Docker/OCI images, local
+  directories, and SBOM documents (SPDX, CycloneDX) to detect known CVEs with severity ratings.
+  Commonly used in CI/CD pipelines for supply chain security validation.
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Scan target: container image (e.g. ubuntu:latest), local directory path, or SBOM file path"
+    required: true
+    format: "positional"
+    position: 0
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for scan results"
+    required: false
+    flag: "--output"
+    format: "flag"
+    default: "table"
+    options: ["json", "table", "cyclonedx", "cyclonedx-json", "sarif", "template"]
+
+  - name: "severity-threshold"
+    type: "string"
+    description: "Fail the scan if any vulnerability is found at or above this severity level"
+    required: false
+    flag: "--fail-on"
+    format: "flag"
+    options: ["negligible", "low", "medium", "high", "critical"]
+
+  - name: "only-fixed"
+    type: "boolean"
+    description: "Only report vulnerabilities that have a known fix available"
+    required: false
+    flag: "--only-fixed"
+    format: "flag"
+    default: false
+
+  - name: "add-cpes-if-none"
+    type: "boolean"
+    description: "Generate CPEs for packages that do not have any CPE data (improves match coverage)"
+    required: false
+    flag: "--add-cpes-if-none"
+    format: "flag"
+    default: false
+
+  - name: "file"
+    type: "string"
+    description: "Write output to a file instead of stdout"
+    required: false
+    flag: "--file"
+    format: "flag"
+
+  - name: "config"
+    type: "string"
+    description: "Path to a Grype config file (.grype.yaml)"
+    required: false
+    flag: "--config"
+    format: "flag"
+
+  - name: "scope"
+    type: "string"
+    description: "Selection of layers to scan when scanning a container image"
+    required: false
+    flag: "--scope"
+    format: "flag"
+    default: "squashed"
+    options: ["squashed", "all-layers"]
+
+  - name: "platform"
+    type: "string"
+    description: "Target platform for image scanning (e.g. linux/arm64)"
+    required: false
+    flag: "--platform"
+    format: "flag"
+
+  - name: "quiet"
+    type: "boolean"
+    description: "Suppress all output other than the vulnerability list"
+    required: false
+    flag: "--quiet"
+    format: "flag"
+    default: false

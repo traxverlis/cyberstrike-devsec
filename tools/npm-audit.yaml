@@ -1,0 +1,81 @@
+name: "npm-audit"
+command: "npm"
+enabled: true
+short_description: "Vulnerability scanner for Node.js npm package dependencies"
+description: |
+  'npm audit' submits the package dependency tree to the npm Advisory database and
+  returns a report of known vulnerabilities with severity ratings and remediation
+  advice. It can automatically fix some vulnerabilities using 'npm audit fix'.
+  Supports JSON output for integration with security dashboards and CI/CD pipelines.
+  Run from the directory containing a package.json and package-lock.json file.
+parameters:
+  - name: "audit"
+    type: "string"
+    description: "The npm subcommand to run"
+    required: true
+    format: "positional"
+    position: 0
+    default: "audit"
+
+  - name: "project-path"
+    type: "string"
+    description: "Working directory containing the Node.js project (package.json)"
+    required: false
+    flag: "--prefix"
+    format: "flag"
+
+  - name: "audit-level"
+    type: "string"
+    description: "Minimum vulnerability level that causes the command to exit with a non-zero code"
+    required: false
+    flag: "--audit-level"
+    format: "flag"
+    default: "low"
+    options: ["info", "low", "moderate", "high", "critical", "none"]
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format for audit results"
+    required: false
+    flag: "--json"
+    format: "flag"
+    options: ["json", "text"]
+
+  - name: "production-only"
+    type: "boolean"
+    description: "Only audit production dependencies (exclude devDependencies)"
+    required: false
+    flag: "--omit=dev"
+    format: "flag"
+    default: false
+
+  - name: "fix"
+    type: "boolean"
+    description: "Automatically install patched versions of vulnerable packages"
+    required: false
+    flag: "fix"
+    format: "positional"
+    default: false
+
+  - name: "force"
+    type: "boolean"
+    description: "Force fixes including breaking/semver-major changes (use with caution)"
+    required: false
+    flag: "--force"
+    format: "flag"
+    default: false
+
+  - name: "package-lock-only"
+    type: "boolean"
+    description: "Only process package-lock.json without updating node_modules"
+    required: false
+    flag: "--package-lock-only"
+    format: "flag"
+    default: false
+
+  - name: "registry"
+    type: "string"
+    description: "Alternative npm registry URL for vulnerability advisory lookups"
+    required: false
+    flag: "--registry"
+    format: "flag"

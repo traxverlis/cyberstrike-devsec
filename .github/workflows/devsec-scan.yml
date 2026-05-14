@@ -1,0 +1,507 @@
+name: CyberStrikeAI DevSec Scan
+
+on:
+  push:
+    branches: [ "main", "master", "develop", "release/**" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
+permissions:
+  contents: read
+  security-events: write   # Required for SARIF upload to GitHub Security tab
+  pull-requests: write     # Required for PR comment
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPORTS_DIR: ${{ github.workspace }}/security-reports
+
+jobs:
+  # ── Job 1: CVE Dependency Scan ────────────────────────────────────────────
+  cve-scan:
+    name: CVE Dependency Scan (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    outputs:
+      critical-count: ${{ steps.summary.outputs.critical }}
+      high-count: ${{ steps.summary.outputs.high }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Grype (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+          grype version
+
+      - name: Install Grype (Windows)
+        if: runner.os == 'Windows'
+        run: winget install Anchore.Grype --accept-source-agreements --accept-package-agreements --silent
+        continue-on-error: true
+
+      - name: Install Syft (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Install Syft (Windows)
+        if: runner.os == 'Windows'
+        run: winget install Anchore.Syft --accept-source-agreements --accept-package-agreements --silent
+        continue-on-error: true
+
+      - name: Generate SBOM (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p "$REPORTS_DIR"
+          syft dir:. -o cyclonedx-json="$REPORTS_DIR/sbom.json" --quiet
+
+      - name: Generate SBOM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null
+          syft "dir:$env:GITHUB_WORKSPACE" -o "cyclonedx-json=$reportsDir\sbom.json" --quiet
+
+      - name: Run Grype CVE Scan (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          grype sbom:"$REPORTS_DIR/sbom.json" \
+            --output sarif \
+            --file "$REPORTS_DIR/grype.sarif" \
+            --add-cpes-if-none || true
+          grype sbom:"$REPORTS_DIR/sbom.json" \
+            --output json \
+            --file "$REPORTS_DIR/grype.json" \
+            --add-cpes-if-none || true
+
+      - name: Run Grype CVE Scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          grype "sbom:$reportsDir\sbom.json" --output sarif --file "$reportsDir\grype.sarif" --add-cpes-if-none
+          grype "sbom:$reportsDir\sbom.json" --output json  --file "$reportsDir\grype.json"  --add-cpes-if-none
+
+      - name: Extract summary (Linux/macOS)
+        if: runner.os != 'Windows'
+        id: summary
+        run: |
+          CRITICAL=$(jq '[.matches[] | select(.vulnerability.severity=="Critical")] | length' \
+            "$REPORTS_DIR/grype.json" 2>/dev/null || echo 0)
+          HIGH=$(jq '[.matches[] | select(.vulnerability.severity=="High")] | length' \
+            "$REPORTS_DIR/grype.json" 2>/dev/null || echo 0)
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+          echo "### CVE Scan Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Severity | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Critical | $CRITICAL |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| High     | $HIGH |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Extract summary (Windows)
+        if: runner.os == 'Windows'
+        id: summary-win
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          $data = Get-Content "$reportsDir\grype.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+          $critical = if ($data) { ($data.matches | Where-Object { $_.vulnerability.severity -eq 'Critical' } | Measure-Object).Count } else { 0 }
+          $high     = if ($data) { ($data.matches | Where-Object { $_.vulnerability.severity -eq 'High' }     | Measure-Object).Count } else { 0 }
+          echo "critical=$critical" >> $env:GITHUB_OUTPUT
+          echo "high=$high" >> $env:GITHUB_OUTPUT
+          "### CVE Scan Results (Windows)`n| Severity | Count |`n|----------|-------|`n| Critical | $critical |`n| High | $high |" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/grype.sarif
+          category: cve-dependency-scan
+
+      - name: Upload CVE report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cve-scan-results
+          path: ${{ env.REPORTS_DIR }}/grype.json
+          retention-days: 30
+
+  # ── Job 2: OWASP SAST Scan ────────────────────────────────────────────────
+  owasp-sast:
+    name: OWASP SAST (Semgrep) (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    outputs:
+      error-count: ${{ steps.summary.outputs.errors }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        if: runner.os != 'Windows'
+        run: pip install semgrep
+
+      - name: Install Semgrep (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pip install semgrep
+        continue-on-error: true
+
+      - name: Run Semgrep OWASP scan (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p "$REPORTS_DIR"
+          semgrep \
+            --config "p/owasp-top-ten" \
+            --config "p/csharp" \
+            --config "p/java" \
+            --config "p/javascript" \
+            --config "p/typescript" \
+            --config "p/react" \
+            --sarif \
+            --output "$REPORTS_DIR/semgrep.sarif" \
+            --metrics off \
+            . 2>/dev/null || true
+          semgrep \
+            --config "p/owasp-top-ten" \
+            --config "p/csharp" \
+            --config "p/java" \
+            --config "p/javascript" \
+            --config "p/typescript" \
+            --config "p/react" \
+            --json \
+            --output "$REPORTS_DIR/semgrep.json" \
+            --metrics off \
+            . 2>/dev/null || true
+
+      - name: Run Semgrep OWASP scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null
+          semgrep scan `
+            --config "p/owasp-top-ten" --config "p/csharp" --config "p/java" `
+            --config "p/javascript" --config "p/typescript" --config "p/react" `
+            --sarif --output "$reportsDir\semgrep.sarif" --metrics off .
+          semgrep scan `
+            --config "p/owasp-top-ten" --config "p/csharp" --config "p/java" `
+            --config "p/javascript" --config "p/typescript" --config "p/react" `
+            --json --output "$reportsDir\semgrep.json" --metrics off .
+
+      - name: Extract summary (Linux/macOS)
+        if: runner.os != 'Windows'
+        id: summary
+        run: |
+          ERRORS=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' \
+            "$REPORTS_DIR/semgrep.json" 2>/dev/null || echo 0)
+          WARNINGS=$(jq '[.results[] | select(.extra.severity == "WARNING")] | length' \
+            "$REPORTS_DIR/semgrep.json" 2>/dev/null || echo 0)
+          echo "errors=$ERRORS" >> "$GITHUB_OUTPUT"
+          echo "### OWASP SAST Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Level | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ERROR (High/Critical) | $ERRORS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| WARNING (Medium)      | $WARNINGS |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && runner.os != 'Windows'
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/semgrep.sarif
+          category: owasp-sast
+
+      - name: Upload SARIF to GitHub Security (Windows)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && runner.os == 'Windows'
+        with:
+          sarif_file: ${{ github.workspace }}\security-reports\semgrep.sarif
+          category: owasp-sast-windows
+
+      - name: Upload SAST report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-sast-results-${{ runner.os }}
+          path: |
+            ${{ env.REPORTS_DIR }}/semgrep.json
+            ${{ github.workspace }}\security-reports\semgrep.json
+          retention-days: 30
+
+  # ── Job 3: Secret Detection ────────────────────────────────────────────────
+  secret-scan:
+    name: Secret Detection (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    outputs:
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history required for Gitleaks git scan
+
+      - name: Install Gitleaks (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          GITLEAKS_VER=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
+            | jq -r .tag_name)
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VER}/gitleaks_${GITLEAKS_VER#v}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+
+      - name: Install Gitleaks (Windows)
+        if: runner.os == 'Windows'
+        run: winget install Gitleaks.Gitleaks --accept-source-agreements --accept-package-agreements --silent
+        continue-on-error: true
+
+      - name: Run Gitleaks secret scan (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p "$REPORTS_DIR"
+          gitleaks detect \
+            --source . \
+            --report-format sarif \
+            --report-path "$REPORTS_DIR/gitleaks.sarif" \
+            --no-banner \
+            --exit-code 0 || true
+          gitleaks detect \
+            --source . \
+            --report-format json \
+            --report-path "$REPORTS_DIR/gitleaks.json" \
+            --no-banner \
+            --exit-code 0 || true
+
+      - name: Run Gitleaks secret scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null
+          gitleaks detect --source . --report-format sarif --report-path "$reportsDir\gitleaks.sarif" --no-banner --exit-code 0
+          gitleaks detect --source . --report-format json  --report-path "$reportsDir\gitleaks.json"  --no-banner --exit-code 0
+
+      - name: Extract summary (Linux/macOS)
+        if: runner.os != 'Windows'
+        id: summary
+        run: |
+          SECRETS=$(jq 'if type == "array" then length else 0 end' \
+            "$REPORTS_DIR/gitleaks.json" 2>/dev/null || echo 0)
+          echo "secrets=$SECRETS" >> "$GITHUB_OUTPUT"
+          echo "### Secret Scan Results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SECRETS" -gt 0 ]; then
+            echo "⚠️ **$SECRETS potential secret(s) detected** — rotate credentials immediately!" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No secrets detected" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Extract summary (Windows)
+        if: runner.os == 'Windows'
+        id: summary-win
+        shell: pwsh
+        run: |
+          $reportsDir = "$env:GITHUB_WORKSPACE\security-reports"
+          $data = Get-Content "$reportsDir\gitleaks.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+          $secrets = if ($data -and $data.Count) { $data.Count } else { 0 }
+          echo "secrets=$secrets" >> $env:GITHUB_OUTPUT
+          if ($secrets -gt 0) {
+            "### Secret Scan Results (Windows)`n⚠️ **$secrets potential secret(s) detected** — rotate credentials immediately!" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "### Secret Scan Results (Windows)`n✅ No secrets detected" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && runner.os != 'Windows'
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/gitleaks.sarif
+          category: secret-detection
+
+      - name: Upload SARIF to GitHub Security (Windows)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && runner.os == 'Windows'
+        with:
+          sarif_file: ${{ github.workspace }}\security-reports\gitleaks.sarif
+          category: secret-detection-windows
+
+      - name: Upload secrets report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: secret-scan-results-${{ runner.os }}
+          path: |
+            ${{ env.REPORTS_DIR }}/gitleaks.json
+            ${{ github.workspace }}\security-reports\gitleaks.json
+          retention-days: 30
+
+  # ── Job 4: IaC Security (Checkov) ─────────────────────────────────────────
+  iac-scan:
+    name: IaC Security (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov IaC scan
+        run: |
+          mkdir -p "$REPORTS_DIR"
+          checkov \
+            --directory . \
+            --framework all \
+            --output sarif \
+            --output-file-path "$REPORTS_DIR/checkov.sarif" \
+            --soft-fail \
+            --quiet 2>/dev/null || true
+          checkov \
+            --directory . \
+            --framework all \
+            --output json \
+            --output-file-path "$REPORTS_DIR/checkov.json" \
+            --soft-fail \
+            --quiet 2>/dev/null || true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ env.REPORTS_DIR }}/checkov.sarif
+          category: iac-security
+
+      - name: Upload IaC report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iac-scan-results
+          path: ${{ env.REPORTS_DIR }}/checkov.json
+          retention-days: 30
+
+  # ── Job 5: Security Gate (blocks merge) ──────────────────────────────────
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [cve-scan, owasp-sast, secret-scan]
+    if: always()
+    steps:
+      - name: Evaluate security gate
+        id: gate
+        run: |
+          CRITICAL="${{ needs.cve-scan.outputs.critical-count }}"
+          SECRETS="${{ needs.secret-scan.outputs.secret-count }}"
+          SAST_ERRORS="${{ needs.owasp-sast.outputs.error-count }}"
+
+          CRITICAL=${CRITICAL:-0}
+          SECRETS=${SECRETS:-0}
+          SAST_ERRORS=${SAST_ERRORS:-0}
+
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "secrets=$SECRETS" >> "$GITHUB_OUTPUT"
+          echo "sast_errors=$SAST_ERRORS" >> "$GITHUB_OUTPUT"
+
+          echo "| Check | Count | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Critical CVEs | $CRITICAL | $([ "$CRITICAL" -gt 0 ] && echo "❌" || echo "✅") |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secrets | $SECRETS | $([ "$SECRETS" -gt 0 ] && echo "❌" || echo "✅") |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SAST Errors | $SAST_ERRORS | $([ "$SAST_ERRORS" -gt 0 ] && echo "⚠️" || echo "✅") |" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+            echo "gate_status=FAIL" >> "$GITHUB_OUTPUT"
+          else
+            echo "gate_status=PASS" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download scan artifacts for PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/scan-artifacts
+        continue-on-error: true
+
+      - name: Post PR comment with findings summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const critical = parseInt('${{ steps.gate.outputs.critical }}') || 0;
+            const secrets = parseInt('${{ steps.gate.outputs.secrets }}') || 0;
+            const sastErrors = parseInt('${{ steps.gate.outputs.sast_errors }}') || 0;
+            const gateStatus = '${{ steps.gate.outputs.gate_status }}';
+
+            const statusEmoji = gateStatus === 'PASS' ? '✅' : '❌';
+            const statusLabel = gateStatus === 'PASS' ? 'PASSED' : 'FAILED — action required';
+
+            const body = [
+              `## 🔒 CyberStrikeAI DevSec Security Gate: ${statusEmoji} ${statusLabel}`,
+              '',
+              '| Check | Count | Status |',
+              '|-------|-------|--------|',
+              `| Critical CVEs | ${critical} | ${critical > 0 ? '❌ Fix immediately' : '✅ None'} |`,
+              `| Exposed Secrets | ${secrets} | ${secrets > 0 ? '❌ Rotate credentials!' : '✅ None'} |`,
+              `| SAST High/Critical | ${sastErrors} | ${sastErrors > 0 ? '⚠️ Review findings' : '✅ None'} |`,
+              '',
+              critical > 0 || secrets > 0
+                ? '> ⚠️ **Merge is blocked.** Resolve all Critical and Secret findings before merging.'
+                : '> Security gate passed. Review any warnings in the [Security tab](' + context.payload.repository.html_url + '/security).',
+              '',
+              `_Scan triggered by commit \`${context.sha.slice(0, 7)}\` | [View full results](${context.payload.repository.html_url}/actions/runs/${context.runId})_`
+            ].join('\n');
+
+            // Find existing bot comment and update, or create new
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('CyberStrikeAI DevSec Security Gate')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if Critical findings
+        if: steps.gate.outputs.gate_status == 'FAIL'
+        run: |
+          echo "❌ Security gate FAILED"
+          echo "Critical CVEs: ${{ steps.gate.outputs.critical }}"
+          echo "Exposed Secrets: ${{ steps.gate.outputs.secrets }}"
+          echo ""
+          echo "Resolve all Critical and Secret findings before merging."
+          exit 1
