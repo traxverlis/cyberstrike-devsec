@@ -496,6 +496,7 @@ def generate_report(
     output_path: Path,
     output_format: str,
 ) -> None:
+    """Génère un rapport de sécurité professionnel, lisible et 100% auto-rempli."""
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y-%m-%d %H:%M UTC")
 
@@ -504,149 +505,360 @@ def generate_report(
     print(f"[*] Timestamp: {timestamp}")
     print()
 
-    # ── Load results ──────────────────────────────────────────────
     print("[*] Loading tool results...")
-    port_findings = load_nmap_results(results_dir)
-    print(f"    nmap: {len(port_findings)} ports loaded")
-
-    nuclei_findings = load_nuclei_results(results_dir)
-    print(f"    nuclei: {len(nuclei_findings)} findings loaded")
-
+    port_findings    = load_nmap_results(results_dir)
+    nuclei_findings  = load_nuclei_results(results_dir)
     testssl_findings = load_testssl_results(results_dir)
-    print(f"    testssl: {len(testssl_findings)} findings loaded")
-
-    nikto_findings = load_nikto_results(results_dir)
-    print(f"    nikto: {len(nikto_findings)} findings loaded")
-
+    nikto_findings   = load_nikto_results(results_dir)
     semgrep_findings = load_semgrep_results(results_dir)
-    print(f"    semgrep: {len(semgrep_findings)} findings loaded")
-    gitleaks_findings = load_gitleaks_results(results_dir)
-    print(f"    gitleaks: {len(gitleaks_findings)} findings loaded")
-    grype_findings = load_grype_results(results_dir)
-    print(f"    grype: {len(grype_findings)} findings loaded")
-    trivy_findings = load_trivy_results(results_dir)
-    print(f"    trivy: {len(trivy_findings)} findings loaded")
+    gitleaks_findings= load_gitleaks_results(results_dir)
+    grype_findings   = load_grype_results(results_dir)
+    trivy_findings   = load_trivy_results(results_dir)
     checkov_findings = load_checkov_results(results_dir)
-    print(f"    checkov: {len(checkov_findings)} findings loaded")
     trufflehog_findings = load_trufflehog_results(results_dir)
-    print(f"    trufflehog: {len(trufflehog_findings)} findings loaded")
-    all_findings = (nuclei_findings + testssl_findings + nikto_findings
-        + semgrep_findings + gitleaks_findings + grype_findings
-        + trivy_findings + checkov_findings + trufflehog_findings)
 
-    # ── Deduplicate & score ───────────────────────────────────────
-    print("[*] Deduplicating findings...")
+    print(f"    nmap:{len(port_findings)} nuclei:{len(nuclei_findings)} nikto:{len(nikto_findings)}")
+    print(f"    semgrep:{len(semgrep_findings)} gitleaks:{len(gitleaks_findings)} grype:{len(grype_findings)}")
+
+    # Charger contexte
+    target = "N/A"
+    ptes_ctx = {}
+    scan_summary = {}
+    for c in [results_dir/"summary.json", results_dir.parent/"summary.json"]:
+        if c.exists():
+            try: scan_summary = json.load(open(c)); target = scan_summary.get("target","N/A")
+            except: pass
+            break
+    for c in [results_dir/"ptes_context.json", results_dir.parent/"ptes_context.json"]:
+        if c.exists():
+            try: ptes_ctx = json.load(open(c))
+            except: pass
+            break
+
+    # Charger analyse IA
+    ai_content = ""
+    for c in [results_dir.parent/"ai_analysis.md", results_dir/"ai_analysis.md"]:
+        if c.exists():
+            try: ai_content = c.read_text()
+            except: pass
+            break
+
+    # Agréger findings
+    all_findings = (nuclei_findings + testssl_findings + nikto_findings +
+                    semgrep_findings + gitleaks_findings + grype_findings +
+                    trivy_findings + checkov_findings + trufflehog_findings)
     all_findings = deduplicate_findings(all_findings)
     all_findings = ensure_cvss_scores(all_findings)
     all_findings.sort(key=lambda f: f.get("cvss", 0.0), reverse=True)
-    print(f"    {len(all_findings)} unique findings after deduplication")
-
     stats = generate_stats(all_findings)
-    print(f"[*] Stats: Critical={stats['Critical']} High={stats['High']} "
-          f"Medium={stats['Medium']} Low={stats['Low']} Info={stats['Info']}")
+    print(f"[*] Total: {stats['total']} findings C:{stats['Critical']} H:{stats['High']} M:{stats['Medium']}")
 
-    # ── Resolve template ──────────────────────────────────────────
-    if template_path is None:
-        default_templates = {
-            1: "reports/templates/level1-static-report.md",
-            2: "reports/templates/level2-active-scan-report.md",
-            3: "reports/templates/level3-pentest-report.md",
-        }
-        template_path = Path(default_templates.get(level, default_templates[2]))
+    # Calculer score
+    score = max(0, min(100, 100 - stats["Critical"]*20 - stats["High"]*10 - stats["Medium"]*5))
+    grade = "A" if score>=85 else "B" if score>=70 else "C" if score>=50 else "D" if score>=30 else "F"
 
-    if not template_path.exists():
-        print(f"[WARN] Template not found: {template_path}. Generating minimal report.")
-        template_content = f"# Security Report — Level {level}\n\nGenerated: {timestamp}\n\n"
-    else:
-        with open(template_path, "r", encoding="utf-8") as f:
-            template_content = f.read()
+    # Catégories
+    technologies   = ptes_ctx.get("technologies", [])
+    open_ports     = ptes_ctx.get("open_ports", [])
+    http_endpoints = ptes_ctx.get("http_endpoints", [])
+    secrets        = [f for f in all_findings if f.get("tool") in ("gitleaks","trufflehog")]
+    cves           = [f for f in all_findings if f.get("tool") in ("grype","trivy")]
+    sast           = [f for f in all_findings if f.get("tool") == "semgrep"]
+    web_vulns      = [f for f in all_findings if f.get("tool") in ("nuclei","nikto","testssl","wapiti")]
+    iac            = [f for f in all_findings if f.get("tool") == "checkov"]
+    top5           = [f for f in all_findings if f.get("severity","").lower() in ("critical","high")][:5]
 
-    # ── Build replacement values ──────────────────────────────────
-    replacements = {
-        "SCAN_DATE":          timestamp,
-        "REPORT_DATE":        timestamp,
-        "OPEN_PORT_COUNT":    str(len(port_findings)),
-        "VULN_COUNT":         str(stats["total"]),
-        "C":                  str(stats["Critical"]),
-        "H":                  str(stats["High"]),
-        "M":                  str(stats["Medium"]),
-        "L":                  str(stats["Low"]),
-        "TOTAL_FINDINGS":     str(stats["total"]),
-    }
+    BADGES = {"critical":"🔴","high":"🟠","medium":"🟡","low":"🟢","info":"ℹ️"}
+    def badge(sev): return BADGES.get(str(sev).lower(),"⚪")
 
-    # ── Fill template ─────────────────────────────────────────────
-    print("[*] Filling report template...")
-    report_content = fill_template(template_content, replacements)
+    LEVEL_NAMES = {1:"Static Code Analysis", 2:"Active Web Scan", 3:"Full Penetration Test"}
+    risk = "CRITICAL" if stats["Critical"]>0 else "HIGH" if stats["High"]>0 else "MEDIUM" if stats["Medium"]>0 else "LOW"
+    risk_b = {"CRITICAL":"🔴","HIGH":"🟠","MEDIUM":"🟡","LOW":"🟢"}[risk]
 
-    # ── Build report sections ────────────────────────────────────────────────────
-    def row(f):
-        return {"tool": f.get("tool",""), "id": f.get("id",""), "url": f.get("url",""), "description": f.get("description",""), "severity": f.get("severity",""), "cvss": f.get("cvss",0), "fix": f.get("fix","?"), "package": f.get("package", f.get("url",""))}
+    print("[*] Building professional report...")
 
-    report_content += "\n\n---\n\n## Resultats des scans\n\n"
-    report_content += "*Genere automatiquement - a valider avant livraison au client.*\n\n"
-    report_content += "### Distribution des severites\n\n"
-    report_content += render_stats_ascii(stats)
-    report_content += "\n\n"
+    lines_out = []
 
+    # === COVER PAGE ===
+    lines_out.append("# Security Assessment Report")
+    lines_out.append("")
+    lines_out.append("---")
+    lines_out.append("")
+    lines_out.append("| | |")
+    lines_out.append("|---|---|")
+    lines_out.append(f"| **Report Type** | {LEVEL_NAMES.get(level, f'Level {level}')} |")
+    lines_out.append(f"| **Target** | `{target}` |")
+    lines_out.append(f"| **Date** | {timestamp} |")
+    lines_out.append("| **Conducted by** | CyberStrikeAI DevSec |")
+    lines_out.append("| **Classification** | CONFIDENTIAL |")
+    lines_out.append(f"| **Security Score** | **{score}/100 ({grade})** |")
+    lines_out.append("")
+    lines_out.append("---")
+    lines_out.append("")
+
+    # === EXECUTIVE SUMMARY ===
+    lines_out.append("## 1. Executive Summary")
+    lines_out.append("")
+    lines_out.append(f"{risk_b} **Overall Risk Level: {risk}**")
+    lines_out.append("")
+    lines_out.append(f"A security assessment was conducted against `{target}`. "
+                     f"The assessment identified **{stats['total']} security findings**, "
+                     f"including **{stats['Critical']} critical** and **{stats['High']} high** severity issues.")
+    lines_out.append("")
+    lines_out.append("### Findings Summary")
+    lines_out.append("")
+    lines_out.append("| Severity | Count | Action |")
+    lines_out.append("|----------|-------|--------|")
+    lines_out.append(f"| 🔴 Critical | **{stats['Critical']}** | Immediate — do not deploy |")
+    lines_out.append(f"| 🟠 High     | **{stats['High']}** | Fix within 7 days |")
+    lines_out.append(f"| 🟡 Medium   | **{stats['Medium']}** | Fix within 30 days |")
+    lines_out.append(f"| 🟢 Low      | **{stats['Low']}** | Fix in next sprint |")
+    lines_out.append(f"| **Total**   | **{stats['total']}** | |")
+    lines_out.append("")
+    if technologies:
+        techs_str = ", ".join(technologies[:8])
+        lines_out.append(f"**Technologies detected:** {techs_str}")
+        lines_out.append("")
+    if open_ports:
+        http_p = [p for p in open_ports if p.get("is_http") or p.get("is_tls")]
+        lines_out.append(f"**Network:** {len(open_ports)} open ports, {len(http_p)} HTTP/HTTPS services")
+        lines_out.append("")
+    if http_endpoints:
+        lines_out.append(f"**HTTP endpoints analyzed:** {len(http_endpoints)}")
+        lines_out.append("")
+    lines_out.append("---")
+    lines_out.append("")
+
+    # === AI ANALYSIS ===
+    sec = 2
+    if ai_content:
+        lines_out.append(f"## {sec}. AI-Powered Analysis")
+        lines_out.append("")
+        lines_out.append("> *Powered by GitHub Copilot — automated triage and prioritization*")
+        lines_out.append("")
+        lines_out.append(ai_content.strip())
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
+
+    # === TOP FINDINGS ===
+    if top5:
+        lines_out.append(f"## {sec}. Top Critical Findings")
+        lines_out.append("")
+        for idx_f, f in enumerate(top5, 1):
+            sev = f.get("severity","?").upper()
+            b = badge(f.get("severity",""))
+            tool = f.get("tool","?")
+            fid  = f.get("id","?")
+            desc = f.get("description","")[:300]
+            loc  = f.get("url") or f.get("file","") or f.get("package","")
+            cvss = f.get("cvss",0.0)
+            fix  = f.get("fix","")
+
+            lines_out.append(f"### {b} Finding #{idx_f} — {fid}")
+            lines_out.append("")
+            lines_out.append(f"| Field | Value |")
+            lines_out.append(f"|-------|-------|")
+            lines_out.append(f"| **Severity** | {sev} |")
+            lines_out.append(f"| **Tool** | {tool} |")
+            lines_out.append(f"| **Location** | `{loc}` |")
+            lines_out.append(f"| **CVSS** | {cvss:.1f} |")
+            if fix and fix != "no fix":
+                lines_out.append(f"| **Fix** | `{fix}` |")
+            lines_out.append("")
+            lines_out.append(f"**Description:** {desc}")
+            lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
+
+    # === SECRETS ===
+    if secrets:
+        lines_out.append(f"## {sec}. Exposed Secrets")
+        lines_out.append("")
+        lines_out.append(f"> ⚠️ **{len(secrets)} secret(s) detected** — rotate immediately")
+        lines_out.append("")
+        lines_out.append("| # | Rule | Location | Description |")
+        lines_out.append("|---|------|----------|-------------|")
+        for idx_s, s in enumerate(secrets[:20], 1):
+            loc = s.get("url","") or f"{s.get('file','')}:{s.get('line','')}"
+            desc = s.get("description","")[:80]
+            rule = s.get("id","?")
+            lines_out.append(f"| {idx_s} | `{rule}` | `{loc[:60]}` | {desc} |")
+        if len(secrets) > 20:
+            lines_out.append(f"")
+            lines_out.append(f"*... and {len(secrets)-20} more secrets.*")
+        lines_out.append("")
+        lines_out.append("**Immediate actions:**")
+        lines_out.append("1. Invalidate and rotate all exposed credentials")
+        lines_out.append("2. Add `gitleaks` pre-commit hook to prevent future leaks")
+        lines_out.append("3. Move secrets to a secrets manager (Vault, AWS SSM, etc.)")
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
+
+    # === CVE ===
+    if cves:
+        crit_h = [c for c in cves if c.get("severity","").lower() in ("critical","high")]
+        lines_out.append(f"## {sec}. Vulnerable Dependencies (CVE)")
+        lines_out.append("")
+        lines_out.append(f"> {len(cves)} CVE(s) found — {len(crit_h)} critical/high severity")
+        lines_out.append("")
+        lines_out.append("| # | CVE ID | Package | Fix Version | Severity |")
+        lines_out.append("|---|--------|---------|-------------|----------|")
+        for idx_c, c in enumerate(sorted(cves, key=lambda x:x.get("cvss",0), reverse=True)[:20], 1):
+            pkg  = (c.get("package") or c.get("url",""))[:30]
+            fix  = c.get("fix","no fix available")
+            sev  = c.get("severity","?")
+            cid  = c.get("id","?")
+            lines_out.append(f"| {idx_c} | `{cid}` | `{pkg}` | {fix} | {badge(sev)} {sev} |")
+        if len(cves) > 20:
+            lines_out.append(f"")
+            lines_out.append(f"*... and {len(cves)-20} more CVEs in full scan data.*")
+        lines_out.append("")
+        lines_out.append("**Recommendation:** Update all flagged dependencies to their patched versions.")
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
+
+    # === SAST ===
+    if sast:
+        high_s = [f for f in sast if f.get("severity","").lower() in ("high","error")]
+        lines_out.append(f"## {sec}. Code Vulnerabilities (SAST)")
+        lines_out.append("")
+        lines_out.append(f"> Semgrep OWASP analysis — {len(sast)} total, {len(high_s)} high/critical")
+        lines_out.append("")
+        if high_s:
+            lines_out.append("### High / Critical")
+            lines_out.append("")
+            lines_out.append("| # | Rule | File:Line | Description |")
+            lines_out.append("|---|------|-----------|-------------|")
+            for idx_s, f in enumerate(high_s[:15], 1):
+                rule = f.get("id","").split(".")[-1][:40]
+                url  = f.get("url","")[:50]
+                desc = f.get("description","")[:80]
+                lines_out.append(f"| {idx_s} | `{rule}` | `{url}` | {desc} |")
+            lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
+
+    # === PORTS ===
     if port_findings:
-        n = len(port_findings)
-        report_content += "### Ports & Services ouverts (" + str(n) + " trouves)\n\n"
-        report_content += build_ports_table(port_findings)
-        report_content += "\n\n"
+        lines_out.append(f"## {sec}. Network — Open Ports")
+        lines_out.append("")
+        lines_out.append(build_ports_table(port_findings))
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
 
-    secret_findings = [f for f in all_findings if f.get("tool") in ("gitleaks","trufflehog")]
-    if secret_findings:
-        n = len(secret_findings)
-        report_content += "### 🔴 Secrets exposes (" + str(n) + " findings)\n\n"
-        report_content += "| # | Outil | Regle | Fichier:Ligne | Description |\n"
-        report_content += "|---|-------|-------|---------------|-------------|\n"
-        for i, f in enumerate(secret_findings, 1):
-            r = row(f)
-            report_content += "| " + str(i) + " | " + r["tool"] + " | `" + r["id"] + "` | `" + r["url"][:60] + "` | " + r["description"][:80] + " |\n"
-        report_content += "\n"
+    # === WEB VULNS ===
+    if web_vulns:
+        lines_out.append(f"## {sec}. Web Vulnerabilities")
+        lines_out.append("")
+        lines_out.append(f"> {len(web_vulns)} web vulnerabilities identified")
+        lines_out.append("")
+        lines_out.append("| # | Tool | Finding | URL | Severity |")
+        lines_out.append("|---|------|---------|-----|----------|")
+        for idx_w, f in enumerate(sorted(web_vulns, key=lambda x:x.get("cvss",0), reverse=True)[:20], 1):
+            tool = f.get("tool","")
+            name = f.get("name","")[:50]
+            url  = f.get("url","")[:40]
+            sev  = f.get("severity","")
+            lines_out.append(f"| {idx_w} | {tool} | {name} | `{url}` | {badge(sev)} |")
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
 
-    cve_findings = [f for f in all_findings if f.get("tool") in ("grype","trivy")]
-    if cve_findings:
-        n = len(cve_findings)
-        report_content += "### 🟠 CVE / Dependances vulnerables (" + str(n) + " findings)\n\n"
-        report_content += "| # | Outil | CVE | Package | Fix | Severite |\n"
-        report_content += "|---|-------|-----|---------|-----|----------|\n"
-        for i, f in enumerate(sorted(cve_findings, key=lambda x: x.get("cvss", 0), reverse=True), 1):
-            r = row(f)
-            report_content += "| " + str(i) + " | " + r["tool"] + " | `" + r["id"] + "` | `" + r["package"][:40] + "` | " + r["fix"] + " | " + severity_emoji(r["severity"]) + " " + r["severity"] + " |\n"
-        report_content += "\n"
+    # === IAC ===
+    if iac:
+        lines_out.append(f"## {sec}. Infrastructure Misconfigurations")
+        lines_out.append("")
+        lines_out.append(f"> Checkov — {len(iac)} IaC misconfiguration(s)")
+        lines_out.append("")
+        for f in iac[:10]:
+            lines_out.append(f"- **{f.get('id','')}** `{f.get('file','')}` — {f.get('description','')[:80]}")
+        lines_out.append("")
+        lines_out.append("---")
+        lines_out.append("")
+        sec += 1
 
-    sast_findings = [f for f in all_findings if f.get("tool") == "semgrep"]
-    if sast_findings:
-        n = len(sast_findings)
-        report_content += "### 🟡 Vulnerabilites code - SAST (" + str(n) + " findings)\n\n"
-        report_content += "| # | Regle | Fichier:Ligne | Severite | Description |\n"
-        report_content += "|---|-------|---------------|----------|-------------|\n"
-        for i, f in enumerate(sorted(sast_findings, key=lambda x: x.get("cvss", 0), reverse=True), 1):
-            r = row(f)
-            rule = r["id"].split(".")[-1][:40]
-            report_content += "| " + str(i) + " | `" + rule + "` | `" + r["url"][:60] + "` | " + severity_emoji(r["severity"]) + " " + r["severity"] + " | " + r["description"][:100] + " |\n"
-        report_content += "\n"
+    # === REMEDIATION PLAN ===
+    lines_out.append(f"## {sec}. Remediation Roadmap")
+    lines_out.append("")
 
-    iac_findings = [f for f in all_findings if f.get("tool") == "checkov"]
-    if iac_findings:
-        n = len(iac_findings)
-        report_content += "### 🔵 IaC / Configuration (" + str(n) + " findings)\n\n"
-        report_content += "| # | Check ID | Fichier | Description |\n"
-        report_content += "|---|----------|---------|-------------|\n"
-        for i, f in enumerate(iac_findings, 1):
-            r = row(f)
-            report_content += "| " + str(i) + " | `" + r["id"] + "` | `" + r["url"][:60] + "` | " + r["description"][:80] + " |\n"
-        report_content += "\n"
+    if stats["Critical"] > 0:
+        lines_out.append("### 🔴 Immediate (before next deployment)")
+        lines_out.append("")
+        if secrets:
+            lines_out.append(f"- [ ] Rotate all {len(secrets)} exposed credentials")
+        crit_cves = [c for c in cves if c.get("severity","").lower()=="critical"]
+        if crit_cves:
+            lines_out.append(f"- [ ] Patch {len(crit_cves)} critical CVE(s)")
+        crit_sast = [f for f in sast if f.get("severity","").lower() in ("high","error")][:3]
+        for f in crit_sast:
+            rule = f.get("id","").split(".")[-1]
+            loc  = f.get("url","")
+            lines_out.append(f"- [ ] Fix `{rule}` in `{loc}`")
+        lines_out.append("")
 
-    web_findings = [f for f in all_findings if f.get("tool") in ("nuclei","nikto","testssl")]
-    if web_findings:
-        n = len(web_findings)
-        report_content += "### 🟡 Vulnerabilites Web (" + str(n) + " findings)\n\n"
-        report_content += build_findings_table(web_findings)
-        report_content += "\n\n"
+    if stats["High"] > 0:
+        lines_out.append("### 🟠 Short-term (within 7 days)")
+        lines_out.append("")
+        high_cves = [c for c in cves if c.get("severity","").lower()=="high"]
+        if high_cves:
+            lines_out.append(f"- [ ] Update {len(high_cves)} high-severity dependencies")
+        high_web = [f for f in web_vulns if f.get("severity","").lower() in ("high","critical")]
+        if high_web:
+            lines_out.append(f"- [ ] Fix {len(high_web)} high-severity web vulnerabilities")
+        lines_out.append("")
 
-        # ── Write markdown output ─────────────────────────────────────
+    if stats["Medium"] > 0:
+        lines_out.append("### 🟡 Medium-term (within 30 days)")
+        lines_out.append("")
+        lines_out.append(f"- [ ] Address {stats['Medium']} medium-severity findings")
+        if iac:
+            lines_out.append(f"- [ ] Fix {len(iac)} IaC misconfiguration(s)")
+        lines_out.append("")
+
+    lines_out.append("### Prevention")
+    lines_out.append("")
+    lines_out.append("- [ ] Add `gitleaks` pre-commit hook: `gitleaks detect --staged`")
+    lines_out.append("- [ ] Integrate in CI/CD: `./scripts/scan.sh --mode cicd`")
+    lines_out.append("- [ ] Schedule weekly dependency scans")
+    lines_out.append("- [ ] Add SAST to PR checks")
+    lines_out.append("")
+    lines_out.append("---")
+    lines_out.append("")
+    sec += 1
+
+    # === APPENDIX ===
+    lines_out.append(f"## Appendix — Tools & Coverage")
+    lines_out.append("")
+    lines_out.append("| Tool | Findings | Category |")
+    lines_out.append("|------|----------|----------|")
+    lines_out.append(f"| Gitleaks | {len(gitleaks_findings)} | Secrets |")
+    lines_out.append(f"| TruffleHog | {len(trufflehog_findings)} | Secrets |")
+    lines_out.append(f"| Grype | {len(grype_findings)} | CVE |")
+    lines_out.append(f"| Trivy | {len(trivy_findings)} | CVE |")
+    lines_out.append(f"| Semgrep | {len(sast)} | SAST |")
+    lines_out.append(f"| Nuclei | {len(nuclei_findings)} | Web |")
+    lines_out.append(f"| Nikto | {len(nikto_findings)} | Web |")
+    lines_out.append(f"| Nmap | {len(port_findings)} ports | Network |")
+    lines_out.append(f"| Checkov | {len(iac)} | IaC |")
+    lines_out.append("")
+    lines_out.append(f"---")
+    lines_out.append("")
+    lines_out.append(f"*Report generated by CyberStrikeAI DevSec v3.3.0 — {timestamp}*")
+
+    report_content = "\n".join(lines_out)
+
+    # Write output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     md_path = output_path.with_suffix(".md") if output_format != "md" else output_path
 
@@ -654,7 +866,6 @@ def generate_report(
         f.write(report_content)
     print(f"[+] Markdown report written: {md_path}")
 
-    # ── Convert format ────────────────────────────────────────────
     if output_format in ("pdf", "html"):
         _convert_with_pandoc(md_path, output_path, output_format)
 
