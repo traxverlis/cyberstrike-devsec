@@ -88,9 +88,10 @@ def load_config_yaml(config_path=None) -> dict:
     from pathlib import Path
 
     cfg = {
-        "base_url": "https://api.business.githubcopilot.com",
+        "base_url": "https://api.githubcopilot.com",
         "api_key": "",
-        "model": "gpt-4o",
+        "model": "claude-opus-4.6",
+        "reasoning_effort": "medium",
         "temperature": 0.1,
         "max_tokens": 4096,
     }
@@ -127,6 +128,7 @@ def load_config_yaml(config_path=None) -> dict:
         "AI_API_KEY": "api_key",
         "AI_BASE_URL": "base_url",
         "AI_MODEL": "model",
+        "AI_REASONING": "reasoning_effort",
     }
     for env_var, cfg_key in env_map.items():
         val = os.getenv(env_var)

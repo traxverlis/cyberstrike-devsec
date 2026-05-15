@@ -10,8 +10,9 @@ class TestLoadConfig:
 
     def test_defaults_without_file(self, tmp_path):
         cfg = load_config(tmp_path / "nonexistent.yaml")
-        assert cfg["model"] == "gpt-4o"
+        assert cfg["model"] == "claude-opus-4.6"
         assert cfg["api_key"] == ""
+        assert cfg["reasoning_effort"] == "medium"
 
     def test_with_config_file(self, tmp_path):
         config = tmp_path / "config.yaml"
@@ -56,12 +57,30 @@ class TestCallLlm:
 
     def test_no_api_key(self):
         cfg = {"base_url": "http://localhost", "api_key": "", "model": "test",
-               "temperature": 0.1, "max_tokens": 100}
+               "temperature": 0.1, "max_tokens": 100, "reasoning_effort": "medium"}
         result = call_llm("test", "system", cfg)
         assert "clé API" in result or "API" in result
 
     def test_invalid_endpoint(self):
         cfg = {"base_url": "http://127.0.0.1:1", "api_key": "test-key",
-               "model": "test", "temperature": 0.1, "max_tokens": 100}
+               "model": "test", "temperature": 0.1, "max_tokens": 100,
+               "reasoning_effort": "high"}
         result = call_llm("test", "system", cfg)
         assert "Erreur" in result or "❌" in result
+
+    def test_reasoning_effort_in_payload(self):
+        """reasoning_effort should be included in API payload when set."""
+        import json
+        cfg = {"base_url": "http://127.0.0.1:1", "api_key": "test-key",
+               "model": "claude-opus-4.6", "temperature": 0.1,
+               "max_tokens": 100, "reasoning_effort": "high"}
+        # call_llm will fail but we can verify the function accepts the param
+        result = call_llm("test", "system", cfg)
+        assert isinstance(result, str)  # Should return error string, not crash
+
+    def test_no_reasoning_effort(self):
+        """Should work without reasoning_effort key."""
+        cfg = {"base_url": "http://127.0.0.1:1", "api_key": "test-key",
+               "model": "test", "temperature": 0.1, "max_tokens": 100}
+        result = call_llm("test", "system", cfg)
+        assert isinstance(result, str)

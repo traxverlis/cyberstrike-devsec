@@ -87,7 +87,7 @@ MODE=full
 
 # Activer l'analyse IA
 AI=false
-AI_MODEL=gpt-4o
+AI_MODEL=claude-opus-4.6
 
 # Consentement Level 2
 CONSENT=./reports/consent/consent-signed.pdf

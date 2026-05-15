@@ -85,7 +85,7 @@ Examples:
     --source-dir ./monprojet \\
     --output ./reports/2024-01-15 \\
     --consent ./consent-signed.pdf \\
-    --ai-model claude-sonnet-4-5 \\
+    --ai-model claude-opus-4.6 \\
     --notify-email team@company.com
 """,
     )
@@ -113,7 +113,7 @@ Examples:
     parser.add_argument("--dev", action="store_true",
                         help="Mode développeur — scan ton propre projet sans consentement. "
                              "Tous les niveaux disponibles. NE PAS utiliser sur des systèmes tiers.")
-    parser.add_argument("--ai-model", default="claude-sonnet-4-5", help="AI model for analysis (default: claude-sonnet-4-5)")
+    parser.add_argument("--ai-model", default="claude-opus-4.6", help="AI model for analysis (default: claude-opus-4.6)")
     parser.add_argument("--ai", action="store_true", help="Enable AI-powered analysis (requires config.yaml or GITHUB_COPILOT_TOKEN env var)")
     parser.add_argument("--ai-config", default=None, type=Path, help="Path to config.yaml for AI provider (auto-detected if absent)")
     parser.add_argument("--notify-email", default=None, help="Email address for report notification")

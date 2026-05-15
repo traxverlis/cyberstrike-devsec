@@ -3,17 +3,33 @@
 # Copier le bloc de ton provider dans config.yaml
 # IMPORTANT : format à plat uniquement (pas de sous-niveau "ai:")
 
-# ── GitHub Copilot (recommandé — inclus dans l'abonnement) ───
-# base_url: "https://api.business.githubcopilot.com"
+# ── GitHub Copilot + Claude Opus 4.6 (recommandé) ──────────────
+# base_url: "https://api.githubcopilot.com"
 # api_key: "${GITHUB_COPILOT_TOKEN}"
-# model: "gpt-4o"
+# model: "claude-opus-4.6"
+# reasoning_effort: "medium"       # low | medium | high
 # temperature: 0.1
 # max_tokens: 4096
 
-# ── OpenAI ───────────────────────────────────────────────────
+# ── GitHub Copilot + Claude Sonnet 4.6 (bon rapport qualité/coût) ─
+# base_url: "https://api.githubcopilot.com"
+# api_key: "${GITHUB_COPILOT_TOKEN}"
+# model: "claude-sonnet-4.6"
+# reasoning_effort: "medium"
+# temperature: 0.1
+# max_tokens: 4096
+
+# ── GitHub Copilot + GPT-5 mini (gratuit) ─────────────────────
+# base_url: "https://api.githubcopilot.com"
+# api_key: "${GITHUB_COPILOT_TOKEN}"
+# model: "gpt-5-mini"
+# temperature: 0.1
+# max_tokens: 4096
+
+# ── OpenAI direct ────────────────────────────────────────────
 # base_url: "https://api.openai.com/v1"
 # api_key: "${OPENAI_API_KEY}"
-# model: "gpt-4o"
+# model: "gpt-5.4"
 # temperature: 0.1
 # max_tokens: 4096
 
@@ -24,10 +40,13 @@
 # temperature: 0.1
 # max_tokens: 4096
 
-# ── Anthropic (Claude) ────────────────────────────────────────
-# base_url: "https://api.anthropic.com/v1"
+# ── Anthropic (Claude — nécessite proxy OpenAI-compatible) ───
+# ⚠️  L'API native Anthropic (/v1/messages) n'est PAS compatible.
+# Utiliser GitHub Copilot ou un proxy comme LiteLLM.
+# base_url: "http://localhost:4000/v1"
 # api_key: "${ANTHROPIC_API_KEY}"
-# model: "claude-sonnet-4-5"
+# model: "claude-opus-4.6"
+# reasoning_effort: "high"
 # temperature: 0.1
 # max_tokens: 4096
 

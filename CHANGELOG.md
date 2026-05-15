@@ -7,6 +7,29 @@ Version scheme: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.4.0] — 2026-05-15
+
+### Changed — Modèle IA et endpoint Copilot
+
+- **Modèle par défaut** : `gpt-4o` → `claude-opus-4.6`
+- **Endpoint Copilot** : `api.business.githubcopilot.com` → `api.githubcopilot.com`
+- **Nouveau paramètre `reasoning_effort`** (`low | medium | high`) dans `config.yaml`, `devsec.conf` et le payload API
+
+### Added — Utilitaire YAML et tests
+
+- **`scripts/yaml_utils.py`** : chargement centralisé des configs YAML avec fallbacks et validation
+- **`tests/test_ai_analyzer.py`** : tests unitaires enrichis pour `ai_analyzer.py`
+- **`tests/test_yaml_utils.py`** : tests unitaires pour `yaml_utils.py`
+
+### Documentation
+- `README.md`, `USAGE.md`, `COMMANDS.md` : modèle et endpoint mis à jour
+- `config.yaml` : claude-opus-4.6 + reasoning_effort
+- `config.example.yaml` : exemples enrichis (Claude Opus/Sonnet, GPT-5 mini, note Anthropic)
+- `docs/github-copilot-integration.md` : tableau modèles et stratégie mis à jour
+- `docs/pipeline-architecture.md` : modèle corrigé
+
+---
+
 ## [3.3.0] — 2026-05-15
 
 ### Added — Mode Docker tout-en-un

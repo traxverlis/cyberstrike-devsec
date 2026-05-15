@@ -11,9 +11,10 @@ CyberStrikeAI supports any OpenAI-compatible provider. GitHub Copilot exposes ex
 
 | Model | Best For | Context |
 |-------|----------|---------|
+| `claude-opus-4.6` | Deep code review, security analysis (recommandé) | 200k |
+| `claude-sonnet-4.6` | Fast, high-quality analysis | 200k |
 | `gpt-4o` | General analysis, report generation | 128k |
 | `gpt-4o-mini` | Fast CI/CD scans, quick triage | 128k |
-| `claude-sonnet-4.5` | Deep code review, COBOL analysis | 200k |
 | `claude-haiku-3.5` | Ultra-fast pipeline scans | 200k |
 | `o3-mini` | Complex vulnerability reasoning | 128k |
 | `gemini-2.0-flash` | Speed-optimized scans | 1M |
@@ -22,16 +23,15 @@ CyberStrikeAI supports any OpenAI-compatible provider. GitHub Copilot exposes ex
 
 ### CyberStrikeAI config.yaml
 
+> **IMPORTANT** : format à plat uniquement — pas de sous-niveau `ai:`.
+
 ```yaml
-ai:
-  provider: "openai-compatible"
-  base_url: "https://api.githubcopilot.com"
-  api_key: "${GITHUB_COPILOT_TOKEN}"
-  model: "claude-sonnet-4.5"       # recommended for DevSec
-  fallback_model: "gpt-4o"
-  max_tokens: 4096
-  temperature: 0.1                  # low temp for security analysis
-  timeout: 120
+base_url: "https://api.githubcopilot.com"
+api_key: "${GITHUB_COPILOT_TOKEN}"
+model: "claude-opus-4.6"           # recommended for DevSec
+reasoning_effort: "medium"          # low | medium | high
+temperature: 0.1                    # low temp for security analysis
+max_tokens: 4096
 ```
 
 ### Environment Variables
@@ -56,7 +56,7 @@ services:
     environment:
       - GITHUB_COPILOT_TOKEN=${GITHUB_COPILOT_TOKEN}
       - AI_BASE_URL=https://api.githubcopilot.com
-      - AI_MODEL=claude-sonnet-4.5
+      - AI_MODEL=claude-opus-4.6
 ```
 
 ### GitHub Actions
@@ -75,10 +75,10 @@ services:
 
 ```
 CI/CD Quick Scan    → gpt-4o-mini or claude-haiku-3.5   (speed)
-Full DevSec Audit   → claude-sonnet-4.5                  (quality)
-COBOL Analysis      → claude-sonnet-4.5                  (best for legacy)
-Report Generation   → gpt-4o                             (writing quality)
-Executive Summary   → gpt-4o                             (natural language)
+Full DevSec Audit   → claude-opus-4.6                    (quality)
+COBOL Analysis      → claude-opus-4.6                    (best for legacy)
+Report Generation   → claude-sonnet-4.6                  (writing quality)
+Executive Summary   → claude-sonnet-4.6                  (natural language)
 ```
 
 ## Model Selection per Role
@@ -87,7 +87,7 @@ Edit `roles/devsec-team.yaml` to specify model per role:
 
 ```yaml
 name: "DevSec Team"
-ai_model: "claude-sonnet-4.5"
+ai_model: "claude-opus-4.6"
 ai_base_url: "https://api.githubcopilot.com"
 ```
 
@@ -95,7 +95,7 @@ Edit `roles/devsec-ci-pipeline.yaml` for fast CI:
 
 ```yaml
 name: "DevSec CI Pipeline"
-ai_model: "gpt-4o-mini"
+ai_model: "claude-sonnet-4.6"
 ai_base_url: "https://api.githubcopilot.com"
 ```
 
@@ -138,14 +138,15 @@ export GITHUB_COPILOT_TOKEN=$(./scripts/copilot-token.sh)
 ./scripts/scan.sh --ai
 ```
 
-## Endpoint Copilot Business
+## Endpoint Copilot
 
 ```yaml
 # config.yaml
-base_url: "https://api.business.githubcopilot.com"
+base_url: "https://api.githubcopilot.com"
 api_key: "${GITHUB_COPILOT_TOKEN}"
-model: "gpt-4o"
+model: "claude-opus-4.6"
+reasoning_effort: "medium"    # low | medium | high
 ```
 
-Les en-têtes requis par l'API Copilot Business sont automatiquement ajoutés
+Les en-têtes requis par l'API Copilot sont automatiquement ajoutés
 par `ai_analyzer.py` (Editor-Version, Copilot-Integration-Id).

@@ -650,12 +650,11 @@ En ajoutant `--ai`, l'IA (GitHub Copilot ou autre) analyse les résultats et enr
 Ouvre `config.yaml` et choisis ton provider :
 
 ```yaml
-# config.yaml
-ai:
-  provider: "openai-compatible"
-  base_url: "https://api.githubcopilot.com"
-  api_key: "${GITHUB_COPILOT_TOKEN}"
-  model: "gpt-4o"
+# config.yaml (format à plat)
+base_url: "https://api.githubcopilot.com"
+api_key: "${GITHUB_COPILOT_TOKEN}"
+model: "claude-opus-4.6"
+reasoning_effort: "medium"  # low | medium | high
 ```
 
 Puis exporte ta clé API :
@@ -696,7 +695,7 @@ python3 scripts/devsec-pipeline.py \
   --level 2 \
   --consent "reports/consent/consent-signed.pdf" \
   --ai \
-  --ai-model "gpt-4o" \
+  --ai-model "claude-opus-4.6" \
   --output "reports/scan-client-ai"
 ```
 
@@ -724,7 +723,7 @@ Le rapport PDF possède une section supplémentaire **🤖 Analyse IA** :
 
 ```
 ## 🤖 Analyse IA
-Modèle : gpt-4o via api.githubcopilot.com
+Modèle : claude-opus-4.6 via api.githubcopilot.com
 
 ### Triage & Priorisation
 [L'IA analyse les 60 findings, écarte 5 faux positifs (clés API dans la doc),

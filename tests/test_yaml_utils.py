@@ -81,9 +81,10 @@ class TestLoadConfigYaml:
     def test_defaults(self, tmp_path):
         """Without a config file, defaults should be returned."""
         cfg = load_config_yaml(tmp_path / "nonexistent.yaml")
-        assert cfg["model"] == "gpt-4o"
-        assert cfg["base_url"] == "https://api.business.githubcopilot.com"
+        assert cfg["model"] == "claude-opus-4.6"
+        assert cfg["base_url"] == "https://api.githubcopilot.com"
         assert cfg["api_key"] == ""
+        assert cfg["reasoning_effort"] == "medium"
 
     def test_env_var_expansion(self, tmp_path, monkeypatch):
         """${VAR} references should be expanded from environment."""
@@ -97,9 +98,24 @@ class TestLoadConfigYaml:
         """Environment variables should override config file values."""
         config = tmp_path / "config.yaml"
         config.write_text('model: "gpt-3.5"')
-        monkeypatch.setenv("AI_MODEL", "claude-sonnet-4-5")
+        monkeypatch.setenv("AI_MODEL", "claude-sonnet-4.6")
         cfg = load_config_yaml(config)
-        assert cfg["model"] == "claude-sonnet-4-5"
+        assert cfg["model"] == "claude-sonnet-4.6"
+
+    def test_reasoning_effort_from_config(self, tmp_path):
+        """reasoning_effort should be loaded from config file."""
+        config = tmp_path / "config.yaml"
+        config.write_text('reasoning_effort: "high"')
+        cfg = load_config_yaml(config)
+        assert cfg["reasoning_effort"] == "high"
+
+    def test_reasoning_effort_env_override(self, monkeypatch, tmp_path):
+        """AI_REASONING env var should override config file."""
+        config = tmp_path / "config.yaml"
+        config.write_text('reasoning_effort: "low"')
+        monkeypatch.setenv("AI_REASONING", "high")
+        cfg = load_config_yaml(config)
+        assert cfg["reasoning_effort"] == "high"
 
     def test_missing_env_var(self, tmp_path):
         """Missing env vars should resolve to empty string."""

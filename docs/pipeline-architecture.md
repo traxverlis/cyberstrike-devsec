@@ -174,7 +174,7 @@ GitHub Actions workflow for Level 3 pentests. Uses GitHub Environments (`pentest
 
 The pipeline integrates with the CyberStrikeAI analysis engine in several ways:
 
-1. **AI-powered triage** — Pass `--ai-model claude-sonnet-4-5` to enable AI-assisted finding prioritization in `generate-report.py`.
+1. **AI-powered triage** — Pass `--ai-model claude-opus-4.6` to enable AI-assisted finding prioritization in `generate-report.py`.
 2. **SAST enhancement** — Semgrep results are fed to CyberStrikeAI for context-aware false positive filtering.
 3. **Remediation suggestions** — The report generator can query CyberStrikeAI for fix recommendations per finding.
 4. **Language detection** — `--lang auto` delegates to CyberStrikeAI's language detector for optimal scan rule selection.
@@ -182,7 +182,7 @@ The pipeline integrates with the CyberStrikeAI analysis engine in several ways:
 ```
 devsec-pipeline.py
       │
-      ├── generate-report.py ──→ CyberStrikeAI API (claude-sonnet-4-5)
+      ├── generate-report.py ──→ CyberStrikeAI API (claude-opus-4.6)
       │         │                    ├── /analyze (finding triage)
       │         │                    ├── /remediate (fix suggestions)
       │         │                    └── /detect-lang (language detection)
@@ -245,7 +245,7 @@ python scripts/devsec-pipeline.py \
   --lang auto \
   --source-dir ./src \
   --consent ./consent-pentest-signed.pdf \
-  --ai-model claude-sonnet-4-5 \
+  --ai-model claude-opus-4.6 \
   --notify-email rssi@company.com \
   --operator "John Doe (OSCP)"
 # → Prompts for CONFIRM before executing

@@ -204,9 +204,10 @@ docker compose run devsec verify
 
 ```bash
 # config.yaml (format à plat)
-base_url: "https://api.business.githubcopilot.com"
+base_url: "https://api.githubcopilot.com"
 api_key: "${GITHUB_COPILOT_TOKEN}"
-model: "gpt-4o"
+model: "claude-opus-4.6"
+reasoning_effort: "medium"    # low | medium | high
 temperature: 0.1
 max_tokens: 4096
 ```
@@ -232,10 +233,9 @@ export GITHUB_COPILOT_TOKEN=$(./scripts/copilot-token.sh)
 
 | Provider | base_url | api_key |
 |----------|----------|---------|
-| GitHub Copilot | `https://api.business.githubcopilot.com` | `${GITHUB_COPILOT_TOKEN}` |
+| GitHub Copilot | `https://api.githubcopilot.com` | `${GITHUB_COPILOT_TOKEN}` |
 | OpenAI | `https://api.openai.com/v1` | `${OPENAI_API_KEY}` |
 | Ollama (local) | `http://localhost:11434/v1` | `ollama` |
-| Anthropic | `https://api.anthropic.com/v1` | `${ANTHROPIC_API_KEY}` |
 | DeepSeek | `https://api.deepseek.com/v1` | `${DEEPSEEK_API_KEY}` |
 
 ---
@@ -320,7 +320,7 @@ python3 scripts/devsec-pipeline.py \
   --target https://app.exemple.com \
   --level 2 \
   --consent reports/consent/consent-signed.pdf \
-  --ai --ai-model gpt-4o
+  --ai --ai-model claude-opus-4.6
 
 # Level 3 — pentest complet
 python3 scripts/devsec-pipeline.py \

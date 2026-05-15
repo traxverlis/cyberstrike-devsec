@@ -63,7 +63,7 @@ def call_llm(prompt: str, system: str, cfg: dict) -> str:
     if not api_key:
         return "[AI] ⚠️  Pas de clé API configurée — mode IA désactivé. Voir config.yaml"
 
-    payload = json.dumps({
+    payload_dict = {
         "model": model,
         "temperature": float(cfg.get("temperature", 0.1)),
         "max_tokens": int(cfg.get("max_tokens", 4096)),
@@ -71,7 +71,14 @@ def call_llm(prompt: str, system: str, cfg: dict) -> str:
             {"role": "system", "content": system},
             {"role": "user",   "content": prompt},
         ],
-    }).encode("utf-8")
+    }
+
+    # Reasoning effort (low/medium/high) — like VS Code Copilot thinking slider
+    reasoning = cfg.get("reasoning_effort", "").lower()
+    if reasoning in ("low", "medium", "high"):
+        payload_dict["reasoning_effort"] = reasoning
+
+    payload = json.dumps(payload_dict).encode("utf-8")
 
     headers = {
         "Content-Type": "application/json",
