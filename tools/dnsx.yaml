@@ -1,0 +1,34 @@
+name: "dnsx"
+command: "dnsx"
+enabled: true
+short_description: "Résolution DNS rapide + bruteforce"
+description: |
+  dnsx est un outil DNS rapide et polyvalent de ProjectDiscovery.
+  Supporte la résolution en masse, le bruteforce de sous-domaines,
+  la validation de wildcards, et les requêtes multi-types (A, MX, NS...).
+  Idéal pour valider des listes de sous-domaines et enrichir la recon.
+  PTES phase: 2 — Intelligence Gathering / 3 — Scanning
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Domaine ou liste de domaines"
+    required: true
+    flag: "-d"
+    format: "flag"
+  - name: "wordlist"
+    type: "string"
+    description: "Wordlist pour bruteforce"
+    required: false
+    flag: "-w"
+    format: "flag"
+  - name: "output"
+    type: "string"
+    description: "Fichier de sortie"
+    required: false
+    flag: "-o"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

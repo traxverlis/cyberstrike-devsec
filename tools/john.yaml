@@ -1,0 +1,33 @@
+name: "john"
+command: "john"
+enabled: true
+short_description: "CPU hash cracking + wordlists"
+description: |
+  John the Ripper est un cracker de mots de passe classique (CPU).
+  Supporte de nombreux formats : MD5, SHA, bcrypt, DES, NTLM, etc.
+  Inclut des règles de mutation de mots de passe et peut utiliser
+  des wordlists personnalisées. Idéal pour post-exploitation.
+  PTES phase: 6 — Post-Exploitation
+parameters:
+  - name: "hash_file"
+    type: "string"
+    description: "Fichier contenant les hashes"
+    required: true
+    format: "positional"
+  - name: "wordlist"
+    type: "string"
+    description: "Wordlist à utiliser"
+    required: false
+    flag: "--wordlist"
+    format: "flag"
+  - name: "format"
+    type: "string"
+    description: "Format du hash (raw-md5, sha512crypt...)"
+    required: false
+    flag: "--format"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

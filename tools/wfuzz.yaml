@@ -1,0 +1,40 @@
+name: "wfuzz"
+command: "wfuzz"
+enabled: true
+short_description: "Fuzzer web avancé"
+description: |
+  Wfuzz est un fuzzer web complet permettant de tester les paramètres,
+  headers, cookies, et chemins d'URL. Supporte les authentifications,
+  les proxies, les encodeurs, les filtres de réponse et les patterns
+  de bypass WAF. Très puissant pour l'énumération et l'injection.
+  PTES phase: 4 — Vulnerability Analysis / 5 — Exploitation
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target URL avec FUZZ comme placeholder"
+    required: true
+    flag: "-u"
+    format: "flag"
+  - name: "wordlist"
+    type: "string"
+    description: "Wordlist à utiliser"
+    required: true
+    flag: "-w"
+    format: "flag"
+  - name: "filter_code"
+    type: "string"
+    description: "Codes HTTP à filtrer (ex: 404)"
+    required: false
+    flag: "--hc"
+    format: "flag"
+  - name: "output"
+    type: "string"
+    description: "Fichier de sortie"
+    required: false
+    flag: "-o"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

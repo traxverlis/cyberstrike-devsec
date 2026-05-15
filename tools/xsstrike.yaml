@@ -1,0 +1,34 @@
+name: "xsstrike"
+command: "xsstrike"
+enabled: true
+short_description: "XSS avancé avec bypass WAF"
+description: |
+  XSStrike est un outil XSS avancé capable de détecter et exploiter
+  les vulnérabilités Cross-Site Scripting réfléchi, stocké et DOM XSS.
+  Il intègre des techniques de bypass WAF, un moteur de fuzzing intelligent
+  et un analyseur de réponses HTML/JS pour maximiser la détection.
+  PTES phase: 4 — Vulnerability Analysis
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target URL (avec paramètres pour XSS réfléchi)"
+    required: true
+    flag: "-u"
+    format: "flag"
+  - name: "crawl"
+    type: "boolean"
+    description: "Crawler le site pour trouver les endpoints"
+    required: false
+    flag: "--crawl"
+    format: "flag"
+  - name: "blind"
+    type: "string"
+    description: "URL de callback pour Blind XSS"
+    required: false
+    flag: "--blind"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

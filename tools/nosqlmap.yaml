@@ -1,0 +1,22 @@
+name: "nosqlmap"
+command: "nosqlmap"
+enabled: true
+short_description: "Injection NoSQL (MongoDB, CouchDB)"
+description: |
+  NoSQLMap est un outil d'audit et d'exploitation des vulnérabilités
+  d'injection NoSQL. Supporte MongoDB, CouchDB, Redis et d'autres
+  bases de données NoSQL. Peut tester les authentifications bypasses,
+  les injections de données et l'extraction d'informations.
+  PTES phase: 4 — Vulnerability Analysis / 5 — Exploitation
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target URL ou host"
+    required: true
+    flag: "--attack"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

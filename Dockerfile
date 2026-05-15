@@ -149,6 +149,49 @@ RUN ZAP_VER=$(curl -s https://api.github.com/repos/zaproxy/zaproxy/releases/late
     && find /opt/zaproxy -name "zap-baseline.py" -exec ln -sf {} /usr/local/bin/zap-baseline.py \; 2>/dev/null || true \
     && rm -f /tmp/zap.tar.gz
 
+# ── Outils d'injection web ──────────────────────────────────────────────────
+RUN pipx install xsstrike 2>/dev/null || pip3 install xsstrike -q
+RUN pipx install commix 2>/dev/null || pip3 install commix -q
+RUN pipx install arjun
+RUN apt-get update -qq && apt-get install -y -qq libcurl4-openssl-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && pip3 install pycurl wfuzz -q
+RUN git clone --depth 1 https://github.com/epinna/tplmap /opt/tplmap \
+    && pip3 install -r /opt/tplmap/requirements.txt -q \
+    && chmod +x /opt/tplmap/tplmap.py \
+    && ln -sf /opt/tplmap/tplmap.py /usr/local/bin/tplmap
+
+# ── OSINT / Recon ────────────────────────────────────────────────────────────────
+RUN AMASS_VER=$(curl -s https://api.github.com/repos/owasp-amass/amass/releases/latest | jq -r '.tag_name') \
+    && curl -sSfL "https://github.com/owasp-amass/amass/releases/download/${AMASS_VER}/amass_linux_amd64.tar.gz" \
+    -o /tmp/amass.tar.gz \
+    && tar -xzf /tmp/amass.tar.gz -C /tmp/ \
+    && find /tmp/ -name "amass" -type f -exec mv {} /usr/local/bin/amass \; \
+    && chmod +x /usr/local/bin/amass \
+    && rm -rf /tmp/amass.tar.gz /tmp/amass_*
+
+RUN DNSX_VER=$(curl -s https://api.github.com/repos/projectdiscovery/dnsx/releases/latest | jq -r '.tag_name') \
+    && DNSX_NUM="${DNSX_VER#v}" \
+    && curl -sSfL \
+    "https://github.com/projectdiscovery/dnsx/releases/download/${DNSX_VER}/dnsx_${DNSX_NUM}_linux_amd64.zip" \
+    -o /tmp/dnsx.zip \
+    && unzip -q /tmp/dnsx.zip -d /tmp/dnsx_bin \
+    && mv /tmp/dnsx_bin/dnsx /usr/local/bin/ \
+    && rm -rf /tmp/dnsx.zip /tmp/dnsx_bin
+
+RUN git clone --depth 1 https://github.com/laramies/theHarvester /opt/theHarvester \
+    && pip3 install /opt/theHarvester -q
+
+# ── Hash cracking ──────────────────────────────────────────────────────────────────
+RUN apt-get update -qq && apt-get install -y -qq hashcat john \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── NoSQL injection ───────────────────────────────────────────────────────────────
+RUN git clone --depth 1 https://github.com/codingo/NoSQLMap /opt/nosqlmap \
+    && echo '#!/bin/bash\npython3 /opt/nosqlmap/nosqlmap.py "$@"' \
+    > /usr/local/bin/nosqlmap \
+    && chmod +x /usr/local/bin/nosqlmap
+
 # ── Wapiti ────────────────────────────────────────────────────────────────────
 RUN pipx install wapiti3
 

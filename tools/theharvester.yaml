@@ -1,0 +1,34 @@
+name: "theharvester"
+command: "theHarvester"
+enabled: true
+short_description: "OSINT emails/sous-domaines"
+description: |
+  theHarvester collecte des informations OSINT sur les cibles :
+  emails, sous-domaines, IPs, URLs via Google, Bing, Shodan,
+  LinkedIn et de nombreuses autres sources. Outil essentiel
+  pour la phase de reconnaissance passive.
+  PTES phase: 2 — Intelligence Gathering
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Domaine cible"
+    required: true
+    flag: "-d"
+    format: "flag"
+  - name: "source"
+    type: "string"
+    description: "Source OSINT (google, bing, all...)"
+    required: false
+    flag: "-b"
+    format: "flag"
+  - name: "output"
+    type: "string"
+    description: "Fichier de sortie XML"
+    required: false
+    flag: "-f"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

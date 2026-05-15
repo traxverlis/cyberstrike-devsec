@@ -1,0 +1,34 @@
+name: "commix"
+command: "commix"
+enabled: true
+short_description: "Injection OS/commandes"
+description: |
+  Commix est un outil automatisé de détection et d'exploitation
+  des vulnérabilités d'injection de commandes OS. Il supporte
+  de nombreux vecteurs d'injection (bash, python, perl, ruby...),
+  des techniques d'évasion et différents modes d'exploitation.
+  PTES phase: 4 — Vulnerability Analysis / 5 — Exploitation
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target URL avec paramètre injectable"
+    required: true
+    flag: "--url"
+    format: "flag"
+  - name: "batch"
+    type: "boolean"
+    description: "Mode non-interactif"
+    required: false
+    flag: "--batch"
+    format: "flag"
+  - name: "os"
+    type: "string"
+    description: "OS cible (unix/windows)"
+    required: false
+    flag: "--os"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

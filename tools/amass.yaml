@@ -1,0 +1,34 @@
+name: "amass"
+command: "amass"
+enabled: true
+short_description: "DNS/OSINT enum avancé"
+description: |
+  Amass est un outil OWASP pour l'énumération DNS et la cartographie
+  réseau via OSINT. Découvre les sous-domaines, IPs, ASN, certificats
+  et relations entre assets. Utilise de nombreuses sources (crt.sh,
+  Shodan, VirusTotal, etc.) pour une reconnaissance exhaustive.
+  PTES phase: 2 — Intelligence Gathering / 3 — Scanning
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Domaine cible"
+    required: true
+    flag: "-d"
+    format: "flag"
+  - name: "output"
+    type: "string"
+    description: "Fichier de sortie"
+    required: false
+    flag: "-o"
+    format: "flag"
+  - name: "passive"
+    type: "boolean"
+    description: "Mode passif uniquement (OSINT)"
+    required: false
+    flag: "-passive"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

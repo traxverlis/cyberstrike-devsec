@@ -1,0 +1,38 @@
+name: "hashcat"
+command: "hashcat"
+enabled: true
+short_description: "GPU hash cracking"
+description: |
+  Hashcat est l'outil de cracking de mots de passe le plus rapide.
+  Supporte MD5, SHA1/256/512, bcrypt, NTLM, WPA2 et +300 types de hashes.
+  Utilise le GPU pour des performances maximales. Supporte attaque par
+  dictionnaire, règles, masque et combinaison.
+  PTES phase: 6 — Post-Exploitation
+parameters:
+  - name: "hash_file"
+    type: "string"
+    description: "Fichier contenant les hashes"
+    required: true
+    format: "positional"
+  - name: "wordlist"
+    type: "string"
+    description: "Wordlist/dictionnaire"
+    required: false
+    format: "positional"
+  - name: "hash_type"
+    type: "string"
+    description: "Type de hash (0=MD5, 1800=sha512crypt...)"
+    required: false
+    flag: "-m"
+    format: "flag"
+  - name: "attack_mode"
+    type: "string"
+    description: "Mode d'attaque (0=dict, 3=bruteforce)"
+    required: false
+    flag: "-a"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "Arguments supplémentaires"
+    required: false
+    format: "positional"

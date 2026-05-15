@@ -154,11 +154,21 @@ class ToolLoader:
         level2_tools = level1_tools + [
             "nmap", "nuclei-passive", "nikto", "testssl",
             "whatweb", "subfinder", "gobuster", "wapiti",
+            # OSINT / Recon
+            "amass", "theharvester", "dnsx",
+            # Param discovery
+            "arjun",
         ]
         level3_tools = level2_tools + [
             "nuclei-exploit", "sqlmap", "ffuf",
             "dalfox", "hydra", "feroxbuster",
             "zaproxy",  # optionnel — nécessite Java + ZAP
+            # Injection web
+            "xsstrike", "commix", "tplmap", "nosqlmap",
+            # Fuzzing avancé
+            "wfuzz",
+            # Hash cracking
+            "hashcat", "john",
         ]
 
         mapping = {1: level1_tools, 2: level2_tools, 3: level3_tools}
@@ -402,6 +412,80 @@ class ToolLoader:
                     "description": "Exploitation templates (Nuclei)",
                     "cmd": ["nuclei", "-u", target, "-json", "-o", str(out),
                             "-severity", "high,critical"],
+                    "output_file": out,
+                })
+
+            # xsstrike — XSS avancé
+            xsstrike = self.load_tool("xsstrike")
+            if xsstrike:
+                out = raw_dir / "xsstrike-results.txt"
+                scans.append({
+                    "name": "xsstrike",
+                    "description": "XSS scan avancé (XSStrike)",
+                    "cmd": ["xsstrike", "-u", target, "--crawl", "--blind"],
+                    "output_file": out,
+                })
+
+            # commix — injection OS/commandes
+            commix = self.load_tool("commix")
+            if commix:
+                out = raw_dir / "commix-results.txt"
+                scans.append({
+                    "name": "commix",
+                    "description": "OS command injection test (commix)",
+                    "cmd": ["commix", "--url", target, "--batch"],
+                    "output_file": out,
+                })
+
+            # tplmap — SSTI
+            tplmap = self.load_tool("tplmap")
+            if tplmap:
+                out = raw_dir / "tplmap-results.txt"
+                scans.append({
+                    "name": "tplmap",
+                    "description": "SSTI template injection test (tplmap)",
+                    "cmd": ["tplmap", "-u", target],
+                    "output_file": out,
+                })
+
+            # wfuzz — fuzzing avancé
+            wfuzz = self.load_tool("wfuzz")
+            if wfuzz:
+                out = raw_dir / "wfuzz-results.json"
+                scans.append({
+                    "name": "wfuzz",
+                    "description": "Web parameter fuzzing (wfuzz)",
+                    "cmd": ["wfuzz", "-u", f"{target}/FUZZ", "-w",
+                            "/usr/share/wordlists/dirb/common.txt",
+                            "--hc", "404", "-o", str(out), "-f", "json"],
+                    "output_file": out,
+                })
+
+        # ── Level 2: OSINT + param discovery ─────────────────────────────────
+        if level >= 2:
+            # amass — DNS enum
+            amass = self.load_tool("amass")
+            if amass:
+                import re as _re
+                # Extraire le domaine depuis l'URL cible
+                domain_match = _re.search(r'(?:https?://)?([^/]+)', target)
+                domain = domain_match.group(1) if domain_match else target
+                out = raw_dir / "amass-results.txt"
+                scans.append({
+                    "name": "amass",
+                    "description": "DNS/OSINT enumeration (amass)",
+                    "cmd": ["amass", "enum", "-passive", "-d", domain, "-o", str(out)],
+                    "output_file": out,
+                })
+
+            # arjun — découverte paramètres
+            arjun = self.load_tool("arjun")
+            if arjun:
+                out = raw_dir / "arjun-params.json"
+                scans.append({
+                    "name": "arjun",
+                    "description": "Hidden parameter discovery (arjun)",
+                    "cmd": ["arjun", "-u", target, "-o", str(out)],
                     "output_file": out,
                 })
 
@@ -883,6 +967,46 @@ class PTESEngine:
             out = d / "cors-results.txt"
             out.write_text("\n".join(cors_results))
 
+        # arjun — découverte de paramètres cachés
+        if self._available("arjun"):
+            for url in http_targets[:3]:
+                out = d / "arjun-params.json"
+                s = self._scan("p4-arjun", f"Hidden parameter discovery (arjun) → {url}",
+                    ["arjun", "-u", url, "-o", str(out)],
+                    out, run_fn, timeout=120)
+                scans.append(s)
+                break  # un seul pour éviter les timeouts
+
+        # xsstrike — XSS avancé sur les endpoints avec paramètres
+        if self._available("xsstrike"):
+            xss_urls = [e for e in self.ctx.http_endpoints if "?" in e][:3]
+            for url in xss_urls:
+                out = d / f"xsstrike-{hash(url) % 10000}.txt"
+                s = self._scan("p4-xsstrike", f"XSS scan avancé (xsstrike) → {url}",
+                    ["xsstrike", "-u", url, "--blind"],
+                    out, run_fn, timeout=180)
+                scans.append(s)
+
+        # commix — injection OS/commandes
+        if self._available("commix"):
+            for url in http_targets[:2]:
+                out = d / "commix-results.txt"
+                s = self._scan("p4-commix", f"OS command injection (commix) → {url}",
+                    ["commix", "--url", url, "--batch"],
+                    out, run_fn, timeout=180)
+                scans.append(s)
+                break
+
+        # tplmap — SSTI
+        if self._available("tplmap"):
+            for url in http_targets[:2]:
+                out = d / "tplmap-results.txt"
+                s = self._scan("p4-tplmap", f"SSTI detection (tplmap) → {url}",
+                    ["tplmap", "-u", url],
+                    out, run_fn, timeout=180)
+                scans.append(s)
+                break
+
         print(f"[PTES]   {len(self.ctx.vulnerabilities)} vulnérabilités identifiées")
         return scans
 
@@ -969,6 +1093,26 @@ class PTESEngine:
                 ["nuclei", "-u", self.target, "-json", "-o", str(out),
                  "-severity", "high,critical", "-no-interactsh", "-silent"],
                 out, run_fn, timeout=300)
+            scans.append(s)
+
+        # wfuzz — fuzzing avancé
+        if self._available("wfuzz"):
+            for url in self.ctx.http_endpoints[:3]:
+                out = d / "wfuzz-fuzz.json"
+                s = self._scan("p5-wfuzz", f"Web fuzzing avancé (wfuzz) → {url}",
+                    ["wfuzz", "-u", f"{url}/FUZZ", "-w",
+                     "/usr/share/wordlists/dirb/common.txt",
+                     "--hc", "404"],
+                    out, run_fn, timeout=180)
+                scans.append(s)
+                break
+
+        # nosqlmap — injection NoSQL
+        if self._available("nosqlmap"):
+            out = d / "nosqlmap-results.txt"
+            s = self._scan("p5-nosqlmap", f"NoSQL injection test (nosqlmap) → {self.target}",
+                ["nosqlmap", "--attack", self.target],
+                out, run_fn, timeout=120)
             scans.append(s)
 
         return scans
