@@ -7,6 +7,47 @@ Version scheme: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.2.0] — 2026-05-15
+
+### Added — Moteur PTES + 7 nouveaux outils
+
+#### Moteur PTES (Penetration Testing Execution Standard)
+- **`scripts/tool_loader.py`** : `PTESEngine` — moteur 7 phases (remplace `AdaptiveScanner`)
+  - Phase 2 — Information Gathering : nmap, whatweb, subfinder, testssl, enum4linux
+  - Phase 3 — Threat Modeling : automatique (WordPress/PHP/SMB/DB vecteurs)
+  - Phase 4 — Vulnerability Analysis : nuclei sur tous les endpoints, nikto sur chaque port, gobuster, dalfox (XSS), wapiti
+  - Phase 5 — Exploitation (Level 3) : sqlmap ciblé sur vulns Phase 4, hydra, ffuf, zaproxy
+  - Phase 6 — Post-Exploitation (Level 3) : IDOR candidates, JWT analysis
+  - Phase 7 — Reporting : PDF via generate-report.py + ptes_context.json
+- **Chaînage adaptatif** : chaque phase lit le PTESContext enrichi par la précédente
+  - nmap port → nikto/gobuster/nuclei sur ce port
+  - gobuster URL → dalfox/nuclei sur cette URL
+  - nuclei SQLi → sqlmap sur ce endpoint
+
+#### Nouveaux outils (+ YAMLs au format CyberStrikeAI)
+| Outil | Phase | Rôle |
+|-------|-------|------|
+| whatweb | 2 | Fingerprinting CMS/frameworks |
+| subfinder | 2 | Découverte sous-domaines OSINT |
+| enum4linux | 2 | Énumération SMB/Samba |
+| gobuster | 4 | Brute-force répertoires web |
+| dirb | 4 | Découverte contenu web |
+| dalfox | 4/5 | Scanner XSS (réfléchi/stocké/DOM) |
+| hydra | 5 | Brute-force credentials réseau |
+
+#### Option C — Zéro code mort
+- **`scripts/tool_loader.py`** : `ToolLoader` charge dynamiquement les `tools/*.yaml`
+- **`scripts/prompt_loader.py`** : charge `agents/`, `skills/`, `roles/` dynamiquement
+- `devsec-pipeline.py` : commandes depuis YAMLs, prompts depuis agents/skills/roles
+- `ai_analyzer.py` : system prompt depuis `roles/*.yaml` + `agents/*.md` + `skills/*/SKILL.md`
+- Level 1 → 8 outils | Level 2 → 16 outils | Level 3 → 23 outils
+
+### Fixed
+- 4 YAMLs invalides corrigés : nmap.yaml, feroxbuster.yaml, nuclei-passive.yaml, security-headers.yaml
+- Total YAMLs valides : 35/35
+
+---
+
 ## [3.1.0] — 2026-05-15
 
 ### Fixed

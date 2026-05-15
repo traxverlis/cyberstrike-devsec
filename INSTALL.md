@@ -68,8 +68,30 @@ bash scripts/install.sh
 ```
 
 Ce script installe **tout en automatique** :
-- ✅ Outils de scan — grype, trivy, semgrep, gitleaks, trufflehog, syft, osv-scanner, checkov, pip-audit
-- ✅ Outils web — nuclei, nikto, testssl.sh
+
+**Outils Level 1 — Analyse statique :**
+- ✅ grype, trivy, osv-scanner — scan CVE dépendances
+- ✅ semgrep — SAST OWASP Top 10
+- ✅ gitleaks, trufflehog — détection secrets
+- ✅ syft — génération SBOM
+- ✅ checkov, pip-audit — IaC + Python
+
+**Outils Level 2 — Scan actif (PTES Phase 2-4) :**
+- ✅ nmap — ports et services
+- ✅ whatweb, subfinder — fingerprinting et sous-domaines
+- ✅ nuclei, nikto — vulnérabilités web
+- ✅ testssl.sh — analyse TLS/SSL
+- ✅ gobuster, dirb, feroxbuster — découverte d'endpoints
+- ✅ wapiti — scan web (SQLi, XSS, CSRF...)
+- ✅ dalfox — scanner XSS
+- ✅ enum4linux — énumération SMB
+
+**Outils Level 3 — Pentest (PTES Phase 5-6) :**
+- ✅ sqlmap — exploitation SQLi
+- ✅ ffuf — fuzzing
+- ✅ hydra — brute-force credentials
+
+**Infrastructure :**
 - ✅ Dépendances Python — requirements.txt + scripts/consent/requirements.txt
 - ✅ Génération PDF — pandoc + weasyprint (test automatique inclus)
 - ✅ PATH — mis à jour dans `~/.bashrc`
@@ -84,10 +106,17 @@ Ce script installe **tout en automatique** :
   ✅  grype           grype 0.112.0
   ✅  trivy           Version: 0.70.0
   ✅  semgrep         1.163.0
+  ✅  gitleaks        8.30.1
+  ✅  trufflehog      3.95.3
   ...
+  ✅  whatweb         0.5.5
+  ✅  gobuster        3.6.0
+  ✅  dalfox          2.13.0
+  ✅  subfinder       2.x
+  ✅  hydra           9.x
   ✅  weasyprint      WeasyPrint version 68.1
 
-  Score : 14/14 outils opérationnels
+  Score : 26/26 outils opérationnels
 
   ✅ Installation complète ! CyberStrikeAI DevSec est prêt.
 
@@ -105,10 +134,12 @@ Après un `source ~/.bashrc` (ou nouveau terminal) :
 ```bash
 export PATH="$PATH:$HOME/.local/bin"
 
-for tool in grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit nuclei nikto testssl.sh pandoc weasyprint; do
+for tool in grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit \
+            nuclei nikto testssl.sh nmap whatweb subfinder gobuster dirb feroxbuster \
+            wapiti dalfox enum4linux sqlmap ffuf hydra pandoc weasyprint; do
   command -v $tool &>/dev/null \
     && echo "✅ $tool" \
-    || echo "❌ $tool — MANQUANT"
+    || echo "❌ $tool — MANQUANT (voir section 5)"
 done
 ```
 

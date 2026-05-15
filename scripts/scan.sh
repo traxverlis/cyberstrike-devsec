@@ -9,7 +9,8 @@
 # Options:
 #   --target  <path>    Project to scan (default: .)
 #   --output  <path>    Output directory for reports (default: ./security-reports)
-#   --mode    <mode>    Scan mode: quick | full | cicd (default: full)
+#   --mode    <mode>    Scan mode: quick | full | cicd | pipeline (default: full)
+#                       pipeline: delegate ALL scans to devsec-pipeline.py --level 1 (Option C)
 #   --severity <level>  Minimum severity: critical | high | medium | low (default: high)
 #   --no-git            Skip git history scanning (faster for large repos)
 #   --ai                Enable AI-powered analysis via GitHub Copilot (requires config.yaml)
@@ -88,8 +89,8 @@ done
 
 # Validate mode
 case "$MODE" in
-  quick|full|cicd) ;;
-  *) echo "Invalid mode: $MODE. Use: quick, full, or cicd"; exit 1 ;;
+  quick|full|cicd|pipeline) ;;
+  *) echo "Invalid mode: $MODE. Use: quick, full, cicd, or pipeline"; exit 1 ;;
 esac
 
 # ── Helper functions ──────────────────────────────────────────────────────────
@@ -143,6 +144,10 @@ echo ""
 
 # ── Mode descriptions ─────────────────────────────────────────────────────────
 case "$MODE" in
+  pipeline)
+    echo -e "  ${CYAN}Pipeline mode:${RESET} Délègue à devsec-pipeline.py --level 1 (Option C — zéro hardcode)"
+    STEPS=1
+    ;;
   quick)
     echo -e "  ${YELLOW}Quick mode:${RESET} Secrets + Critical CVEs only (~30-60s)"
     STEPS=2
@@ -172,6 +177,25 @@ update_progress() {
   progress "$CURRENT_STEP" "$STEPS" "$1"
   echo ""
 }
+
+
+# ── Pipeline mode: délègue à devsec-pipeline.py ─────────────────────────────────
+if [[ "$MODE" == "pipeline" ]]; then
+  echo -e "${BOLD}━━━ Pipeline Mode (Option C — ToolLoader + PromptLoader) ━━${RESET}"
+  PIPELINE_SCRIPT="$(dirname "$0")/devsec-pipeline.py"
+  if ! command -v python3 > /dev/null 2>&1 || [[ ! -f "$PIPELINE_SCRIPT" ]]; then
+    error "devsec-pipeline.py introuvable ou python3 non disponible"
+    exit 2
+  fi
+
+  PIPELINE_ARGS=("--target" "$TARGET" "--level" "1" "--output" "$OUTPUT")
+  [[ "$AI_MODE" == "true" ]] && PIPELINE_ARGS+=("--ai")
+  [[ -n "$AI_CONFIG" ]] && PIPELINE_ARGS+=("--ai-config" "$AI_CONFIG")
+
+  log "Délégation à devsec-pipeline.py (commandes depuis tools/*.yaml, prompts depuis agents/*.md + skills/*.md)..."
+  python3 "$PIPELINE_SCRIPT" "${PIPELINE_ARGS[@]}"
+  exit $?
+fi
 
 # ── Scan 1: Secrets (all modes) ───────────────────────────────────────────────
 echo -e "${BOLD}━━━ Scan 1/${STEPS}: Secret Detection ━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"

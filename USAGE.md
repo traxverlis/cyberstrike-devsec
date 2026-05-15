@@ -412,6 +412,35 @@ Codes de sortie :
   2 = Erreur de scan
 ```
 
+### Moteur PTES — fonctionnement
+
+Quand tu lances un scan Level 2 ou 3, le moteur PTES s'exécute automatiquement :
+
+```
+Phase 2 — Information Gathering
+  nmap         → ports ouverts → nourrit Phase 4 (nikto sur chaque port)
+  whatweb      → technologies → nourrit Phase 3 (threat modeling)
+  subfinder    → sous-domaines → ajoutés comme endpoints à tester
+  testssl      → analyse TLS sur chaque port HTTPS découvert
+  enum4linux   → énumération SMB si port 139/445 détecté
+
+Phase 3 — Threat Modeling (automatique)
+  → WordPress détecté → vecteur CMS ajouté
+  → MySQL port ouvert → vecteur database-exposed ajouté
+
+Phase 4 — Vulnerability Analysis
+  nuclei       → teste TOUS les endpoints (target + ports découverts)
+  nikto        → teste CHAQUE port HTTP séparément
+  gobuster     → brute-force répertoires sur chaque port HTTP
+  dalfox       → XSS sur tous les endpoints avec paramètres ?
+  wapiti       → crawler + SQLi/XSS/CSRF/LFI
+
+Phase 5 — Exploitation (Level 3 uniquement)
+  sqlmap       → teste les endpoints identifiés vulnérables à SQLi
+  ffuf         → fuzzing paramètres
+  hydra        → brute-force SSH/FTP/RDP découverts par nmap
+```
+
 ### devsec-pipeline.py (Niveau 2 & 3)
 
 ```
@@ -492,7 +521,8 @@ Exemples :
 ./scripts/scan-web.sh --target https://monsite.com --consent ./doc-signe.pdf
 
 # Vérifier les outils installés
-for tool in grype trivy semgrep gitleaks trufflehog nuclei nikto; do
+for tool in grype trivy semgrep gitleaks trufflehog syft checkov \
+            nuclei nikto nmap whatweb gobuster dalfox subfinder hydra wapiti weasyprint; do
   command -v $tool &>/dev/null && echo "✅ $tool" || echo "❌ $tool"
 done
 ```

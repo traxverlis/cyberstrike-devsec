@@ -64,7 +64,7 @@
 | File | Status | Notes |
 |------|--------|-------|
 | `docker-compose.yml` | ✅ Valid | All 8 services use correct images, shared volumes, devsec network |
-| `Makefile` | ✅ Consistent | All 15 targets use correct tool names, colors, jq parsing |
+| `devsec.conf` | ✅ Consistent | Configuration centralisée, lue par scan.sh et scan-web.sh |
 | `docs/installation.md` | ✅ Complete | Linux/macOS/Docker instructions, prerequisites |
 | `docs/usage-guide.md` | ✅ Present | Usage scenarios documented |
 | `docs/ci-cd-integration.md` | ✅ Present | CI/CD integration patterns |
@@ -250,7 +250,7 @@ cyberstrike-devsec/
 │   └── trufflehog.yaml                 ← Deep secret scanner (NEW)
 ├── AUDIT.md                            ← This file (NEW)
 ├── docker-compose.yml
-├── Makefile
+├── devsec.conf
 └── README.md                           ← Professional README (NEW)
 
 Total: 38 files | 13 tools | 7 skills | 3 agents | 3 roles | 3 report templates
@@ -318,7 +318,7 @@ Total: 38 files | 13 tools | 7 skills | 3 agents | 3 roles | 3 report templates
 | All Python scripts have `__main__` | ✅ | All 7 scripts verified |
 | YAML files syntactically consistent | ✅ | All roles, tools, agents reviewed |
 | docker-compose has N2/N3 services | ✅ | nmap, nuclei, nikto, zaproxy, sqlmap, ffuf |
-| Makefile has 3-level targets | ✅ | scan-level1, scan-level2, scan-level3, generate-consent, verify-consent |
+| devsec.conf centralise la config | ✅ | TARGET, TARGET_URL, MODE, AI, CONSENT — lus par scan.sh et scan-web.sh |
 | GitHub Actions (all 3 levels) | ✅ | devsec-scan.yml + devsec-level2.yml + devsec-level3.yml |
 | .gitignore excludes `__pycache__` | ✅ Updated | Also excludes *.pdf, consent-token.json |
 | No `__pycache__` in repo | ✅ Cleaned | Removed scripts/__pycache__ and scripts/consent/__pycache__ |

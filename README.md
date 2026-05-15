@@ -50,6 +50,27 @@ Le rapport PDF est généré automatiquement dans `./security-reports/report.pdf
 
 ---
 
+## Méthodologie PTES (Penetration Testing Execution Standard)
+
+Le moteur de scan suit le standard PTES en 7 phases enchaînées :
+
+| Phase | Niveau | Outils |
+|-------|--------|--------|
+| 1 — Pre-Engagement | 1/2/3 | Consentement, scope, RoE (géré par pipeline) |
+| 2 — Information Gathering | 2+ | nmap, whatweb, subfinder, testssl, enum4linux |
+| 3 — Threat Modeling | 2+ | Automatique (analyse des découvertes Phase 2) |
+| 4 — Vulnerability Analysis | 2+ | nuclei, nikto, wapiti, gobuster, dalfox, feroxbuster, gitleaks, semgrep |
+| 5 — Exploitation | 3 | sqlmap, ffuf, hydra, zaproxy, dalfox, nuclei-exploit |
+| 6 — Post-Exploitation | 3 | IDOR candidates, JWT testing, impact assessment |
+| 7 — Reporting | 1/2/3 | PDF via generate-report.py + analyse IA |
+
+**Chaînage adaptatif** : chaque phase lit les résultats de la précédente.
+nmap découvre le port 9090 → nikto/gobuster/nuclei scannent ce port.
+gobuster trouve `/api/v2/users` → dalfox teste XSS sur cette URL.
+nuclei détecte SQLi → sqlmap exploite ce point précis.
+
+---
+
 ## Configuration
 
 Toute la config dans **`devsec.conf`** à la racine :
@@ -171,16 +192,23 @@ python3 scripts/consent/verify-consent.py \
 
 ## Outils intégrés
 
-| Catégorie | Outils |
-|-----------|--------|
-| CVE | Grype, Trivy, OSV-Scanner |
-| SAST | Semgrep (OWASP ruleset) |
-| Secrets | Gitleaks, TruffleHog |
-| SBOM | Syft (CycloneDX, SPDX) |
-| IaC | Checkov (Terraform, Docker, K8s) |
-| Web actif | nmap, Nikto, Nuclei, testssl.sh |
-| Python | pip-audit |
-| Rapports | pandoc + weasyprint (PDF sans LaTeX) |
+| Catégorie | Outils | Phase PTES |
+|-----------|--------|-----------|
+| CVE | Grype, Trivy, OSV-Scanner | 4 — Vulnerability Analysis |
+| SAST | Semgrep (OWASP Top 10) | 4 — Vulnerability Analysis |
+| Secrets | Gitleaks, TruffleHog | 4 — Vulnerability Analysis |
+| SBOM | Syft (CycloneDX, SPDX) | 4 — Vulnerability Analysis |
+| IaC | Checkov (Terraform, Docker, K8s) | 4 — Vulnerability Analysis |
+| Recon passive | nmap, whatweb, subfinder, testssl.sh | 2 — Information Gathering |
+| Recon SMB | enum4linux | 2 — Information Gathering |
+| Web actif | Nuclei, Nikto, Wapiti, gobuster, dirb, feroxbuster | 4 — Vulnerability Analysis |
+| XSS | DalFox | 4/5 — Vuln Analysis / Exploitation |
+| SQLi | sqlmap | 5 — Exploitation |
+| Fuzzing | ffuf | 5 — Exploitation |
+| Brute-force | Hydra | 5 — Exploitation |
+| App scan | OWASP ZAP | 5 — Exploitation |
+| Python | pip-audit | 4 — Vulnerability Analysis |
+| Rapports | pandoc + weasyprint (PDF sans LaTeX) | 7 — Reporting |
 
 ---
 
@@ -194,7 +222,9 @@ bash scripts/install.sh
 
 # Vérifier les outils
 export PATH="$PATH:$HOME/.local/bin"
-for tool in grype trivy semgrep gitleaks trufflehog nuclei nikto weasyprint; do
+for tool in grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov \
+            nuclei nikto testssl.sh whatweb gobuster dalfox subfinder \
+            hydra wapiti feroxbuster ffuf sqlmap nmap weasyprint; do
   command -v $tool &>/dev/null && echo "✅ $tool" || echo "❌ $tool"
 done
 ```

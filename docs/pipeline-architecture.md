@@ -293,3 +293,66 @@ Repository → Actions → DevSec Level 3 — Full Pentest → Run workflow
   scope: "app.company.com and all subdomains, excluding *.internal.company.com"
   test_types: web,network,sqli,auth
 ```
+---
+
+## Moteur PTES — Architecture adaptative
+
+Le pipeline Level 2+ utilise un moteur PTES (Penetration Testing Execution Standard)
+qui orchestre les scans en phases enchaînées plutôt qu'en séquence plate.
+
+### PTESContext — Contexte partagé
+
+```python
+PTESContext:
+  target          # URL/IP cible
+  hosts           # Hôtes découverts
+  open_ports      # Ports ouverts avec services
+  http_endpoints  # URLs HTTP à tester (enrichi par chaque phase)
+  technologies    # CMS/frameworks détectés
+  vulnerabilities # Vulnérabilités identifiées
+  attack_surface  # Modèle de menace (vecteurs d'attaque)
+```
+
+### Flux Phase 1 → Phase 7
+
+```
+Phase 2 — Information Gathering
+  nmap -sV -sC → open_ports enrichi
+  whatweb → technologies enrichi
+  subfinder → http_endpoints enrichi (sous-domaines)
+  testssl → analyse TLS de CHAQUE port TLS découvert par nmap
+  enum4linux → si port 139/445 dans open_ports
+         ↓
+Phase 3 — Threat Modeling
+  → Analyse automatique de open_ports + technologies
+  → attack_surface.vectors : [web, cms-wordpress, database-exposed, ...]
+         ↓
+Phase 4 — Vulnerability Analysis
+  nuclei  → ALL http_endpoints (pas juste le target principal)
+  nikto   → CHAQUE port HTTP dans open_ports
+  gobuster → CHAQUE port HTTP → résultats → http_endpoints enrichi
+  dalfox  → endpoints avec ?params dans http_endpoints
+  wapiti  → crawler + SQLi/XSS/CSRF sur http_endpoints
+         ↓
+Phase 5 — Exploitation (Level 3)
+  sqlmap  → endpoints avec SQLi détecté en Phase 4
+  hydra   → services SSH/FTP/RDP dans open_ports
+  ffuf    → endpoints avec query params
+         ↓
+Phase 6 — Post-Exploitation (Level 3)
+  → IDOR candidates depuis http_endpoints numériques
+  → Impact estimation depuis vulnerabilities
+         ↓
+Phase 7 — Reporting
+  → generate-report.py → PDF
+  → ai_analyzer.py → analyse IA (si --ai)
+  → ptes_context.json sauvegardé
+```
+
+### Chargement dynamique (Option C)
+
+Aucune commande hardcodée dans le code :
+- `ToolLoader` lit `tools/*.yaml` → construit les commandes CLI
+- `PromptLoader` lit `agents/*.md` + `skills/*/SKILL.md` + `roles/*.yaml` → construit les prompts IA
+- Le level filtre les outils via `roles/devsec-team.yaml` (allowed_tools)
+

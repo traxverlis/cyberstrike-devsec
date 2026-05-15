@@ -126,3 +126,26 @@ curl -s https://api.githubcopilot.com/models \
 - ✅ **Native GitHub integration** — works seamlessly in Actions
 - ✅ **No data retention** — Copilot API doesn't train on your code
 - ✅ **Enterprise-ready** — SOC2, GDPR compliant
+
+
+## Token automatique depuis OpenClaw
+
+Si tu utilises OpenClaw, le script `scripts/copilot-token.sh` récupère
+automatiquement le token depuis la configuration OpenClaw :
+
+```bash
+export GITHUB_COPILOT_TOKEN=$(./scripts/copilot-token.sh)
+./scripts/scan.sh --ai
+```
+
+## Endpoint Copilot Business
+
+```yaml
+# config.yaml
+base_url: "https://api.business.githubcopilot.com"
+api_key: "${GITHUB_COPILOT_TOKEN}"
+model: "gpt-4o"
+```
+
+Les en-têtes requis par l'API Copilot Business sont automatiquement ajoutés
+par `ai_analyzer.py` (Editor-Version, Copilot-Integration-Id).

@@ -661,7 +661,7 @@ REM Full scan + Markdown report
 make.bat report TARGET=.\myproject OUTPUT=.\security-reports\report.md
 
 REM CI/CD mode
-make.bat scan-cicd TARGET=.\myproject
+./scripts/scan.sh --target ./myproject --mode cicd
 ```
 
 ---

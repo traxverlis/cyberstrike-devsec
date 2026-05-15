@@ -233,6 +233,138 @@ else
   is_ok testssl.sh && ok "testssl.sh" || warn "testssl.sh non installé (optionnel)"
 fi
 
+# ── whatweb ──────────────────────────────────────────────────────────────────
+if is_ok whatweb; then
+  ok "whatweb (déjà installé)"
+else
+  log "Installation de whatweb..."
+  case "$OS" in
+    macos)   run "brew install whatweb" ;;
+    debian)  run "sudo apt-get install -y whatweb -qq" ;;
+    rhel)    run "sudo dnf install -y whatweb 2>/dev/null || warn 'whatweb non dispo via dnf'" ;;
+    *)       warn "whatweb : installer manuellement" ;;
+  esac
+  is_ok whatweb && ok "whatweb" || warn "whatweb non installé (optionnel)"
+fi
+
+# ── gobuster ──────────────────────────────────────────────────────────────────
+if is_ok gobuster; then
+  ok "gobuster (déjà installé)"
+else
+  log "Installation de gobuster..."
+  case "$OS" in
+    macos)   run "brew install gobuster" ;;
+    debian)  run "sudo apt-get install -y gobuster -qq" ;;
+    rhel)    run "sudo dnf install -y gobuster 2>/dev/null || warn 'gobuster non dispo'" ;;
+    *)       warn "gobuster : installer manuellement" ;;
+  esac
+  is_ok gobuster && ok "gobuster" || warn "gobuster non installé (optionnel)"
+fi
+
+# ── dirb ──────────────────────────────────────────────────────────────────────
+if is_ok dirb; then
+  ok "dirb (déjà installé)"
+else
+  log "Installation de dirb..."
+  case "$OS" in
+    macos)   run "brew install dirb" ;;
+    debian)  run "sudo apt-get install -y dirb -qq" ;;
+    *)       warn "dirb : installer manuellement" ;;
+  esac
+  is_ok dirb && ok "dirb" || warn "dirb non installé (optionnel)"
+fi
+
+# ── hydra ─────────────────────────────────────────────────────────────────────
+if is_ok hydra; then
+  ok "hydra (déjà installé)"
+else
+  log "Installation de hydra..."
+  case "$OS" in
+    macos)   run "brew install hydra" ;;
+    debian)  run "sudo apt-get install -y hydra -qq" ;;
+    rhel)    run "sudo dnf install -y hydra 2>/dev/null || warn 'hydra non dispo'" ;;
+    *)       warn "hydra : installer manuellement" ;;
+  esac
+  is_ok hydra && ok "hydra" || warn "hydra non installé (optionnel)"
+fi
+
+# ── enum4linux ────────────────────────────────────────────────────────────────
+if is_ok enum4linux; then
+  ok "enum4linux (déjà installé)"
+else
+  log "Installation de enum4linux-ng..."
+  run "curl -fsSL https://raw.githubusercontent.com/cddmp/enum4linux-ng/main/enum4linux-ng.py -o /tmp/enum4linux-ng.py"
+  run "echo '#!/bin/bash\npython3 /usr/local/bin/enum4linux-ng.py \"\$@\"' | sudo tee /usr/local/bin/enum4linux > /dev/null"
+  run "sudo cp /tmp/enum4linux-ng.py /usr/local/bin/enum4linux-ng.py && sudo chmod +x /usr/local/bin/enum4linux"
+  is_ok enum4linux && ok "enum4linux" || warn "enum4linux non installé (optionnel)"
+fi
+
+# ── subfinder ─────────────────────────────────────────────────────────────────
+if is_ok subfinder; then
+  ok "subfinder (déjà installé)"
+else
+  log "Installation de subfinder..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install subfinder"
+  else
+    SUBFINDER_VER=$(curl -s https://api.github.com/repos/projectdiscovery/subfinder/releases/latest | jq -r .tag_name)
+    SUBFINDER_NUM="${SUBFINDER_VER#v}"
+    run "curl -fsSL 'https://github.com/projectdiscovery/subfinder/releases/download/\${SUBFINDER_VER}/subfinder_\${SUBFINDER_NUM}_linux_amd64.zip' -o /tmp/subfinder.zip"
+    run "unzip -q /tmp/subfinder.zip -d /tmp/subfinder_bin && sudo mv /tmp/subfinder_bin/subfinder '$INSTALL_PREFIX/subfinder' && sudo chmod +x '$INSTALL_PREFIX/subfinder'"
+    run "rm -f /tmp/subfinder.zip"
+  fi
+  is_ok subfinder && ok "subfinder" || warn "subfinder non installé (optionnel)"
+fi
+
+# ── dalfox ────────────────────────────────────────────────────────────────────
+if is_ok dalfox; then
+  ok "dalfox (déjà installé)"
+else
+  log "Installation de dalfox..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install dalfox"
+  else
+    DALFOX_VER=$(curl -s https://api.github.com/repos/hahwul/dalfox/releases/latest | jq -r .tag_name)
+    run "curl -fsSL 'https://github.com/hahwul/dalfox/releases/download/\${DALFOX_VER}/dalfox-linux-amd64.tar.gz' -o /tmp/dalfox.tar.gz"
+    run "tar -xz -C /tmp -f /tmp/dalfox.tar.gz && sudo mv /tmp/dalfox-linux-amd64 '$INSTALL_PREFIX/dalfox' && sudo chmod +x '$INSTALL_PREFIX/dalfox'"
+    run "rm -f /tmp/dalfox.tar.gz"
+  fi
+  is_ok dalfox && ok "dalfox" || warn "dalfox non installé (optionnel)"
+fi
+
+# ── feroxbuster ───────────────────────────────────────────────────────────────
+if is_ok feroxbuster; then
+  ok "feroxbuster (déjà installé)"
+else
+  log "Installation de feroxbuster..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install feroxbuster"
+  else
+    FEROX_VER=$(curl -s https://api.github.com/repos/epi052/feroxbuster/releases/latest | jq -r .tag_name)
+    run "curl -fsSL 'https://github.com/epi052/feroxbuster/releases/download/\${FEROX_VER}/x86_64-linux-feroxbuster.tar.gz' -o /tmp/feroxbuster.tar.gz"
+    run "tar -xz -C /tmp -f /tmp/feroxbuster.tar.gz feroxbuster 2>/dev/null && sudo mv /tmp/feroxbuster '$INSTALL_PREFIX/feroxbuster' && sudo chmod +x '$INSTALL_PREFIX/feroxbuster'"
+    run "rm -f /tmp/feroxbuster.tar.gz"
+  fi
+  is_ok feroxbuster && ok "feroxbuster" || warn "feroxbuster non installé (optionnel)"
+fi
+
+# ── ffuf ──────────────────────────────────────────────────────────────────────
+if is_ok ffuf; then
+  ok "ffuf (déjà installé)"
+else
+  log "Installation de ffuf..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install ffuf"
+  else
+    FFUF_VER=$(curl -s https://api.github.com/repos/ffuf/ffuf/releases/latest | jq -r .tag_name)
+    FFUF_NUM="${FFUF_VER#v}"
+    run "curl -fsSL 'https://github.com/ffuf/ffuf/releases/download/\${FFUF_VER}/ffuf_\${FFUF_NUM}_linux_amd64.tar.gz' -o /tmp/ffuf.tar.gz"
+    run "tar -xz -C /tmp -f /tmp/ffuf.tar.gz ffuf && sudo mv /tmp/ffuf '$INSTALL_PREFIX/ffuf' && sudo chmod +x '$INSTALL_PREFIX/ffuf'"
+    run "rm -f /tmp/ffuf.tar.gz"
+  fi
+  is_ok ffuf && ok "ffuf" || warn "ffuf non installé (optionnel)"
+fi
+
 # ═════════════════════════════════════════════════════════════════════════════
 # PARTIE 3 — Outils Python via pipx (semgrep, checkov, pip-audit)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -336,7 +468,7 @@ echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━
 echo ""
 
 # Vérification complète de tous les outils attendus
-ALL_TOOLS=(grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit nuclei nikto testssl.sh pandoc weasyprint)
+ALL_TOOLS=(grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit nuclei nikto testssl.sh nmap whatweb gobuster dirb feroxbuster dalfox subfinder hydra wapiti ffuf jq pandoc weasyprint)
 PASS=0; FAIL=0
 for tool in "${ALL_TOOLS[@]}"; do
   if is_ok "$tool"; then

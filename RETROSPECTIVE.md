@@ -51,7 +51,7 @@ A complete, production-ready **multi-level DevSec security analysis module** for
 **Tools (27)**
 - Level 1 (13): `grype`, `trivy`, `semgrep`, `gitleaks`, `trufflehog`, `syft`, `checkov`, `osv-scanner`, `dotnet-audit`, `dotnet-vulnerable`, `npm-audit`, `maven-dependency-check`, `pip-audit`
 - Level 2 (8): `nmap`, `nikto`, `whatweb`, `nuclei-passive`, `testssl`, `cors-scanner`, `security-headers`, `wapiti`
-- Level 3 (9): `sqlmap`, `ffuf`, `zaproxy`, `jwt-tool`, `nuclei-exploit`, `feroxbuster`, `idor-scanner`, `oauth-tester`... + implicit: metasploit referenced in role
+- Level 3 (23): `sqlmap`, `ffuf`, `zaproxy`, `jwt-tool`, `nuclei-exploit`, `feroxbuster`, `idor-scanner`, `oauth-tester`, `dalfox`, `hydra`, `gobuster`, `dirb`...
 
 **Scripts (7 Python + 4 Shell/PS1)**
 - `scripts/devsec-pipeline.py` — Async main orchestrator (rich TUI, all 3 levels)
@@ -326,7 +326,7 @@ cyberstrike-devsec/                        [root]
 ├── AUDIT.md, CHANGELOG.md, SECURITY.md   Project meta-docs
 ├── RETROSPECTIVE.md                       This file
 ├── requirements.txt                       Python deps
-├── docker-compose.yml, Makefile           Infra
+├── docker-compose.yml, devsec.conf         Infra
 ├── config.example.yaml, .gitignore        Config
 └── README.md
 ```
