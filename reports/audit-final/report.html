@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>CyberStrikeAI DevSec Report</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style type="text/css">body{font-family:Arial,sans-serif;max-width:960px;margin:2em auto;padding:0 2em;color:#1a1a2e;line-height:1.6}h1{color:#e94560;border-bottom:3px solid #e94560;padding-bottom:.3em}h2{color:#0f3460;border-bottom:1px solid #0f3460;margin-top:2em}table{border-collapse:collapse;width:100%;margin:1em 0}th{background:#0f3460;color:#fff;padding:.5em 1em;text-align:left}td{border:1px solid #ccc;padding:.5em 1em}tr:nth-child(even){background:#f5f7fa}code,pre{background:#f0f0f0;border-radius:4px;font-family:monospace;font-size:.9em}pre{padding:1em;overflow-x:auto}</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">CyberStrikeAI DevSec Report</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#active-scan-report-level-2" id="toc-active-scan-report-level-2">Active Scan Report — Level 2</a>
+<ul>
+<li><a href="#report-header" id="toc-report-header">Report Header</a>
+<ul>
+<li><a href="#tools-used" id="toc-tools-used">Tools Used</a></li>
+</ul></li>
+<li><a href="#executive-summary" id="toc-executive-summary">Executive
+Summary</a></li>
+<li><a href="#ports-services" id="toc-ports-services">1. Ports &amp;
+Services</a>
+<ul>
+<li><a href="#open-ports-summary" id="toc-open-ports-summary">1.1 Open
+Ports Summary</a></li>
+<li><a href="#cves-associated-with-detected-services" id="toc-cves-associated-with-detected-services">1.2 CVEs Associated with
+Detected Services</a></li>
+<li><a href="#nmap-raw-summary" id="toc-nmap-raw-summary">1.3 nmap Raw
+Summary</a></li>
+</ul></li>
+<li><a href="#ssltls-analysis" id="toc-ssltls-analysis">2. SSL/TLS
+Analysis</a>
+<ul>
+<li><a href="#protocol-support" id="toc-protocol-support">2.1 Protocol
+Support</a></li>
+<li><a href="#cipher-suites" id="toc-cipher-suites">2.2 Cipher
+Suites</a></li>
+<li><a href="#certificate-details" id="toc-certificate-details">2.3
+Certificate Details</a></li>
+<li><a href="#ssltls-findings" id="toc-ssltls-findings">2.4 SSL/TLS
+Findings</a></li>
+</ul></li>
+<li><a href="#security-headers" id="toc-security-headers">3. Security
+Headers</a></li>
+<li><a href="#cors-configuration" id="toc-cors-configuration">4. CORS
+Configuration</a>
+<ul>
+<li><a href="#findings" id="toc-findings">4.1 Findings</a></li>
+<li><a href="#cors-impact-analysis" id="toc-cors-impact-analysis">4.2
+CORS Impact Analysis</a></li>
+</ul></li>
+<li><a href="#web-vulnerabilities" id="toc-web-vulnerabilities">5. Web
+Vulnerabilities</a>
+<ul>
+<li><a href="#findings-table" id="toc-findings-table">5.1 Findings
+Table</a></li>
+<li><a href="#detailed-findings" id="toc-detailed-findings">5.2 Detailed
+Findings</a></li>
+</ul></li>
+<li><a href="#technologies-exposed" id="toc-technologies-exposed">6.
+Technologies Exposed</a></li>
+<li><a href="#prioritized-recommendations" id="toc-prioritized-recommendations">7. Prioritized
+Recommendations</a></li>
+<li><a href="#appendix-a-commands-used" id="toc-appendix-a-commands-used">Appendix A — Commands Used</a></li>
+<li><a href="#appendix-b-raw-tool-output" id="toc-appendix-b-raw-tool-output">Appendix B — Raw Tool
+Output</a></li>
+<li><a href="#resultats-des-scans" id="toc-resultats-des-scans">Resultats des scans</a>
+<ul>
+<li><a href="#distribution-des-severites" id="toc-distribution-des-severites">Distribution des severites</a></li>
+<li><a href="#secrets-exposes-8-findings" id="toc-secrets-exposes-8-findings">🔴 Secrets exposes (8
+findings)</a></li>
+<li><a href="#vulnerabilites-code---sast-19-findings" id="toc-vulnerabilites-code---sast-19-findings">🟡 Vulnerabilites code -
+SAST (19 findings)</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="active-scan-report-level-2">Active Scan Report — Level 2</h1>
+<hr />
+<h2 id="report-header">Report Header</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Target</strong></td>
+<td><code>&lt;!-- TARGET_HOST --&gt;</code></td>
+</tr>
+<tr class="even">
+<td><strong>IP Range</strong></td>
+<td><code>&lt;!-- IP_RANGE --&gt;</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Scan Date</strong></td>
+<td><code>2026-05-15 12:39 UTC</code></td>
+</tr>
+<tr class="even">
+<td><strong>Scan Duration</strong></td>
+<td><code>&lt;!-- SCAN_DURATION --&gt;</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Analyst</strong></td>
+<td><code>&lt;!-- ANALYST_NAME --&gt;</code></td>
+</tr>
+<tr class="even">
+<td><strong>Report Version</strong></td>
+<td>1.0</td>
+</tr>
+<tr class="odd">
+<td><strong>Classification</strong></td>
+<td>CONFIDENTIAL — RESTRICTED</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tools-used">Tools Used</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Tool</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>nmap</td>
+<td>x.x</td>
+<td>Port &amp; service enumeration</td>
+</tr>
+<tr class="even">
+<td>testssl.sh</td>
+<td>x.x</td>
+<td>SSL/TLS analysis</td>
+</tr>
+<tr class="odd">
+<td>nikto</td>
+<td>x.x</td>
+<td>Web server misconfiguration scanning</td>
+</tr>
+<tr class="even">
+<td>wapiti</td>
+<td>x.x</td>
+<td>Web vulnerability scanning</td>
+</tr>
+<tr class="odd">
+<td>nuclei (passive)</td>
+<td>x.x</td>
+<td>Passive CVE/template matching</td>
+</tr>
+<tr class="even">
+<td>whatweb</td>
+<td>x.x</td>
+<td>Technology fingerprinting</td>
+</tr>
+<tr class="odd">
+<td>cors-scanner</td>
+<td>x.x</td>
+<td>CORS misconfiguration detection</td>
+</tr>
+<tr class="even">
+<td>securityheaders</td>
+<td>x.x</td>
+<td>HTTP security headers analysis</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Authorization Reference:</strong> Consent Document ID
+<code>&lt;!-- CONSENT_DOC_ID --&gt;</code> — Level 2 authorized.</p>
+</blockquote>
+<hr />
+<h2 id="executive-summary">Executive Summary</h2>
+<blockquote>
+<p><em>(Non-technical overview. Max 10 lines.)</em></p>
+</blockquote>
+<p>This Level 2 active scan was conducted against
+<code>&lt;!-- TARGET_HOST --&gt;</code> on
+<code>2026-05-15 12:39 UTC</code> under explicit written authorization
+(consent level 2). The scan covered external attack surface enumeration,
+service fingerprinting, SSL/TLS configuration review, web security
+headers, CORS policies, and passive vulnerability detection.</p>
+<p><strong>Attack Surface Overview:</strong></p>
+<ul>
+<li>Open ports discovered: <code>0</code></li>
+<li>Web endpoints analyzed:
+<code>&lt;!-- ENDPOINT_COUNT --&gt;</code></li>
+<li>SSL/TLS issues found:
+<code>&lt;!-- TLS_ISSUE_COUNT --&gt;</code></li>
+<li>Security header gaps:
+<code>&lt;!-- HEADER_ISSUE_COUNT --&gt;</code></li>
+<li>Vulnerabilities identified: <code>27</code> (Critical:
+<code>&lt;!--C--&gt;</code> / High: <code>&lt;!--H--&gt;</code> /
+Medium: <code>&lt;!--M--&gt;</code> / Low:
+<code>&lt;!--L--&gt;</code>)</li>
+</ul>
+<p><strong>Top Risks Discovered:</strong></p>
+<ol type="1">
+<li><code>&lt;!-- TOP_RISK_1 --&gt;</code></li>
+<li><code>&lt;!-- TOP_RISK_2 --&gt;</code></li>
+<li><code>&lt;!-- TOP_RISK_3 --&gt;</code></li>
+</ol>
+<hr />
+<h2 id="ports-services">1. Ports &amp; Services</h2>
+<h3 id="open-ports-summary">1.1 Open Ports Summary</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Port</th>
+<th>Protocol</th>
+<th>Service</th>
+<th>Version</th>
+<th>State</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>80</td>
+<td>TCP</td>
+<td>HTTP</td>
+<td></td>
+<td>open</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>443</td>
+<td>TCP</td>
+<td>HTTPS</td>
+<td></td>
+<td>open</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cves-associated-with-detected-services">1.2 CVEs Associated with
+Detected Services</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Port</th>
+<th>Service</th>
+<th>Version</th>
+<th>CVE ID</th>
+<th>CVSS</th>
+<th>Description</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="nmap-raw-summary">1.3 nmap Raw Summary</h3>
+<pre><code>&lt;!-- PASTE nmap -sV -sC -O OUTPUT HERE --&gt;</code></pre>
+<hr />
+<h2 id="ssltls-analysis">2. SSL/TLS Analysis</h2>
+<blockquote>
+<p>Tool: <code>testssl.sh</code></p>
+</blockquote>
+<h3 id="protocol-support">2.1 Protocol Support</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Protocol</th>
+<th>Supported</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>TLS 1.3</td>
+<td>✅ / ❌</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>TLS 1.2</td>
+<td>✅ / ❌</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>TLS 1.1</td>
+<td>✅ / ❌</td>
+<td>⚠️ Deprecated</td>
+</tr>
+<tr class="even">
+<td>TLS 1.0</td>
+<td>✅ / ❌</td>
+<td>⚠️ Deprecated</td>
+</tr>
+<tr class="odd">
+<td>SSLv3</td>
+<td>✅ / ❌</td>
+<td>🔴 Critical if enabled</td>
+</tr>
+<tr class="even">
+<td>SSLv2</td>
+<td>✅ / ❌</td>
+<td>🔴 Critical if enabled</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cipher-suites">2.2 Cipher Suites</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Cipher Suite</th>
+<th>Key Exchange</th>
+<th>Auth</th>
+<th>Encryption</th>
+<th>MAC</th>
+<th>Rating</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Weak/Deprecated Ciphers Detected:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Cipher</th>
+<th>Issue</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="certificate-details">2.3 Certificate Details</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Subject</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Issuer</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Valid From</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Valid Until</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>SANs</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Key Algorithm</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Key Size</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Signature Algorithm</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>CT Logs</td>
+<td>✅ / ❌</td>
+</tr>
+<tr class="even">
+<td>OCSP Stapling</td>
+<td>✅ / ❌</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ssltls-findings">2.4 SSL/TLS Findings</h3>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Finding</th>
+<th>Severity</th>
+<th>Description</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>TLS-01</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="security-headers">3. Security Headers</h2>
+<blockquote>
+<p>Tool: <code>securityheaders</code> / curl manual check</p>
+</blockquote>
+<table>
+<colgroup>
+<col style="width: 38%" />
+<col style="width: 19%" />
+<col style="width: 17%" />
+<col style="width: 7%" />
+<col style="width: 17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Header</th>
+<th>Status</th>
+<th>Value Observed</th>
+<th>Issue</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Strict-Transport-Security (HSTS)</td>
+<td>✅ Present / ❌ Missing / ⚠️ Misconfigured</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Content-Security-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>X-Frame-Options</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>X-Content-Type-Options</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Referrer-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Permissions-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>X-XSS-Protection</td>
+<td>✅ / ❌ / ⚠️</td>
+<td>(deprecated)</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Cache-Control</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Cross-Origin-Embedder-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Cross-Origin-Opener-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Cross-Origin-Resource-Policy</td>
+<td>✅ / ❌ / ⚠️</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Overall Header Score:</strong>
+<code>&lt;!-- A/B/C/D/F --&gt;</code></p>
+<hr />
+<h2 id="cors-configuration">4. CORS Configuration</h2>
+<blockquote>
+<p>Tool: <code>cors-scanner</code> / manual curl</p>
+</blockquote>
+<h3 id="findings">4.1 Findings</h3>
+<table>
+<colgroup>
+<col style="width: 11%" />
+<col style="width: 14%" />
+<col style="width: 31%" />
+<col style="width: 23%" />
+<col style="width: 7%" />
+<col style="width: 11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Endpoint</th>
+<th>Origin Tested</th>
+<th>Access-Control-Allow-Origin</th>
+<th>Credentials Allowed</th>
+<th>Issue</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="cors-impact-analysis">4.2 CORS Impact Analysis</h3>
+<!-- Describe potential impact: credential theft, cross-origin data exfiltration, etc. -->
+<p><strong>Recommendation:</strong>
+<code>&lt;!-- e.g., Restrict ACAO to specific trusted origins, never use wildcard with credentials --&gt;</code></p>
+<hr />
+<h2 id="web-vulnerabilities">5. Web Vulnerabilities</h2>
+<blockquote>
+<p>Tools: nikto, wapiti, nuclei (passive templates only — Level 2)</p>
+</blockquote>
+<h3 id="findings-table">5.1 Findings Table</h3>
+<table>
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 29%" />
+<col style="width: 19%" />
+<col style="width: 11%" />
+<col style="width: 6%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Tool</th>
+<th>Type</th>
+<th>URL / Parameter</th>
+<th>Severity</th>
+<th>CVSS</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>WEB-01</td>
+<td>nikto</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>WEB-02</td>
+<td>wapiti</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>WEB-03</td>
+<td>nuclei</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="detailed-findings">5.2 Detailed Findings</h3>
+<h4 id="web-01----title---">WEB-01 —
+<code>&lt;!-- Title --&gt;</code></h4>
+<ul>
+<li><p><strong>Severity:</strong>
+<code>&lt;!-- Critical / High / Medium / Low / Info --&gt;</code></p></li>
+<li><p><strong>CVSS Score:</strong>
+<code>&lt;!-- x.x --&gt;</code></p></li>
+<li><p><strong>Tool:</strong>
+<code>&lt;!-- tool name --&gt;</code></p></li>
+<li><p><strong>URL:</strong>
+<code>&lt;!-- affected URL --&gt;</code></p></li>
+<li><p><strong>Description:</strong>
+<code>&lt;!-- Technical description --&gt;</code></p></li>
+<li><p><strong>Evidence:</strong></p>
+<pre><code>&lt;!-- Paste relevant tool output --&gt;</code></pre></li>
+<li><p><strong>Recommendation:</strong>
+<code>&lt;!-- Fix guidance --&gt;</code></p></li>
+</ul>
+<hr />
+<h2 id="technologies-exposed">6. Technologies Exposed</h2>
+<blockquote>
+<p>Tool: whatweb, nuclei fingerprinting</p>
+</blockquote>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 14%" />
+<col style="width: 20%" />
+<col style="width: 19%" />
+<col style="width: 14%" />
+<col style="width: 11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Technology</th>
+<th>Version Detected</th>
+<th>Latest Version</th>
+<th>CVEs Known</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Web Server</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>CMS / Framework</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Frontend</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Backend Runtime</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Database (inferred)</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>WAF / CDN</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Outdated / Vulnerable Components:</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Detected Version</th>
+<th>CVE</th>
+<th>CVSS</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="prioritized-recommendations">7. Prioritized Recommendations</h2>
+<table>
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 20%" />
+<col style="width: 10%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Priority</th>
+<th>Finding Ref</th>
+<th>Title</th>
+<th>Effort</th>
+<th>Impact</th>
+<th>Recommended Action</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>🔴 Critical</td>
+<td></td>
+<td></td>
+<td>Low</td>
+<td>High</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>🟠 High</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>🟡 Medium</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>🟢 Low</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="appendix-a-commands-used">Appendix A — Commands Used</h2>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Port &amp; Service Scan</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">nmap</span> <span class="at">-sV</span> <span class="at">-sC</span> <span class="at">-O</span> <span class="at">-p-</span> <span class="at">--open</span> <span class="at">-oA</span> nmap_results <span class="op">&lt;</span>TARGET<span class="op">&gt;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># SSL/TLS Analysis</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ex">testssl.sh</span> <span class="at">--full</span> <span class="at">--json</span> <span class="op">&lt;</span>TARGET<span class="op">&gt;</span>:443</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Web Server Scan</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="ex">nikto</span> <span class="at">-h</span> https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span> -output nikto_results.txt</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Web Vulnerability Scan</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="ex">wapiti</span> <span class="at">-u</span> https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span> -o wapiti_results/ <span class="at">-f</span> html</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Technology Fingerprinting</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="ex">whatweb</span> <span class="at">-a</span> 3 https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Nuclei Passive Scan</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="ex">nuclei</span> <span class="at">-u</span> https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span> -tags passive <span class="at">-o</span> nuclei_results.txt</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co"># CORS Check</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># cors-scanner or manual:</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-H</span> <span class="st">&quot;Origin: https://evil.example.com&quot;</span> <span class="at">-I</span> https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span>/api/endpoint</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Security Headers</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-I</span> https://<span class="op">&lt;</span>TARGET<span class="op">&gt;</span></span></code></pre></div>
+<hr />
+<h2 id="appendix-b-raw-tool-output">Appendix B — Raw Tool Output</h2>
+<blockquote>
+<p>Attach or reference output files stored in <code>results/</code>
+directory.</p>
+</blockquote>
+<table>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Tool</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>nmap_results.xml</code></td>
+<td>nmap</td>
+<td>Full port scan output</td>
+</tr>
+<tr class="even">
+<td><code>testssl_results.json</code></td>
+<td>testssl.sh</td>
+<td>SSL/TLS detailed output</td>
+</tr>
+<tr class="odd">
+<td><code>nikto_results.txt</code></td>
+<td>nikto</td>
+<td>Web server findings</td>
+</tr>
+<tr class="even">
+<td><code>wapiti_results/</code></td>
+<td>wapiti</td>
+<td>Web vulnerability report</td>
+</tr>
+<tr class="odd">
+<td><code>whatweb_results.txt</code></td>
+<td>whatweb</td>
+<td>Technology fingerprint</td>
+</tr>
+<tr class="even">
+<td><code>nuclei_results.txt</code></td>
+<td>nuclei</td>
+<td>Passive template matches</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Report generated by CyberStrike DevSec — Level 2 Active
+Scan</em><br />
+<em>Classification: CONFIDENTIAL — Not for distribution without
+authorization</em></p>
+<hr />
+<h2 id="resultats-des-scans">Resultats des scans</h2>
+<p><em>Genere automatiquement - a valider avant livraison au
+client.</em></p>
+<h3 id="distribution-des-severites">Distribution des severites</h3>
+<pre><code>Severity Distribution
+──────────────────────────────────────────────────
+🔴 Critical   ███████████████                (8)
+🟠 High       █████                          (3)
+🟡 Medium     ██████████████████████████████ (16)
+🟢 Low                                       (0)
+ℹ️ Info                                      (0)
+──────────────────────────────────────────────────
+Total: 27</code></pre>
+<h3 id="secrets-exposes-8-findings">🔴 Secrets exposes (8 findings)</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 15%" />
+<col style="width: 15%" />
+<col style="width: 33%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Outil</th>
+<th>Regle</th>
+<th>Fichier:Ligne</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>tools/jwt-tool.yaml:164</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>tools/jwt-tool.yaml:171</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>vuln-target/app.py:24</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>vuln-target/app.py:26</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>vuln-target/app.py:191</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>agents/devsec-quick-scan.md:289</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>reports/templates/devsec-full-report.md:214</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>docs/remediation-guide.md:603</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+</tbody>
+</table>
+<h3 id="vulnerabilites-code---sast-19-findings">🟡 Vulnerabilites code -
+SAST (19 findings)</h3>
+<table>
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 14%" />
+<col style="width: 31%" />
+<col style="width: 20%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Regle</th>
+<th>Fichier:Ligne</th>
+<th>Severite</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:74</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:95</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:130</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:70</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:71</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:80</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:81</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:81</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:93</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:97</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:98</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:98</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:127</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:133</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:134</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:136</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:138</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:138</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td><code>avoid_app_run_with_bad_host</code></td>
+<td><code>vuln-target/app2.py:163</code></td>
+<td>🟡 Medium</td>
+<td>Running flask app with host 0.0.0.0 could expose the server
+publicly.</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

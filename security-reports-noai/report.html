@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>CyberStrikeAI DevSec Report</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">body{font-family:Arial,sans-serif;max-width:960px;margin:2em auto;padding:0 2em;color:#1a1a2e;line-height:1.6}h1{color:#e94560;border-bottom:3px solid #e94560;padding-bottom:.3em}h2{color:#0f3460;border-bottom:1px solid #0f3460;margin-top:2em}table{border-collapse:collapse;width:100%;margin:1em 0}th{background:#0f3460;color:#fff;padding:.5em 1em;text-align:left}td{border:1px solid #ccc;padding:.5em 1em}tr:nth-child(even){background:#f5f7fa}code,pre{background:#f0f0f0;border-radius:4px;font-family:monospace;font-size:.9em}pre{padding:1em;overflow-x:auto}</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">CyberStrikeAI DevSec Report</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#security-report-level-1" id="toc-security-report-level-1">Security Report — Level 1</a>
+<ul>
+<li><a href="#resultats-des-scans" id="toc-resultats-des-scans">Resultats des scans</a>
+<ul>
+<li><a href="#distribution-des-severites" id="toc-distribution-des-severites">Distribution des severites</a></li>
+<li><a href="#secrets-exposes-5-findings" id="toc-secrets-exposes-5-findings">🔴 Secrets exposes (5
+findings)</a></li>
+<li><a href="#vulnerabilites-code---sast-19-findings" id="toc-vulnerabilites-code---sast-19-findings">🟡 Vulnerabilites code -
+SAST (19 findings)</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="security-report-level-1">Security Report — Level 1</h1>
+<p>Generated: 2026-05-15 11:26 UTC</p>
+<hr />
+<h2 id="resultats-des-scans">Resultats des scans</h2>
+<p><em>Genere automatiquement - a valider avant livraison au
+client.</em></p>
+<h3 id="distribution-des-severites">Distribution des severites</h3>
+<pre><code>Severity Distribution
+──────────────────────────────────────────────────
+🔴 Critical   █████████                      (5)
+🟠 High       █████                          (3)
+🟡 Medium     ██████████████████████████████ (16)
+🟢 Low                                       (0)
+ℹ️ Info                                      (0)
+──────────────────────────────────────────────────
+Total: 24</code></pre>
+<h3 id="secrets-exposes-5-findings">🔴 Secrets exposes (5 findings)</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 15%" />
+<col style="width: 15%" />
+<col style="width: 33%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Outil</th>
+<th>Regle</th>
+<th>Fichier:Ligne</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>tools/jwt-tool.yaml:164</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>tools/jwt-tool.yaml:171</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>agents/devsec-quick-scan.md:289</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>reports/templates/devsec-full-report.md:214</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>gitleaks</td>
+<td><code>generic-api-key</code></td>
+<td><code>docs/remediation-guide.md:603</code></td>
+<td>Detected a Generic API Key, potentially exposing access to various
+services and</td>
+</tr>
+</tbody>
+</table>
+<h3 id="vulnerabilites-code---sast-19-findings">🟡 Vulnerabilites code -
+SAST (19 findings)</h3>
+<table>
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 14%" />
+<col style="width: 31%" />
+<col style="width: 20%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Regle</th>
+<th>Fichier:Ligne</th>
+<th>Severite</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:74</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:95</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>tainted-sql-string</code></td>
+<td><code>vuln-target/app2.py:130</code></td>
+<td>🟠 High</td>
+<td>Detected user input used to manually construct a SQL string. This is
+usually bad practice because ma</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:70</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:71</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:80</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:81</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:81</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:93</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:97</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:98</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:98</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td><code>sql-injection-db-cursor-execute</code></td>
+<td><code>vuln-target/app2.py:127</code></td>
+<td>🟡 Medium</td>
+<td>User-controlled data from a request is passed to ‘execute()’. This
+could lead to a SQL injection and</td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:133</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:134</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:136</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td><code>directly-returned-format-string</code></td>
+<td><code>vuln-target/app2.py:138</code></td>
+<td>🟡 Medium</td>
+<td>Detected Flask route directly returning a formatted string. This is
+subject to cross-site scripting</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td><code>raw-html-format</code></td>
+<td><code>vuln-target/app2.py:138</code></td>
+<td>🟡 Medium</td>
+<td>Detected user input flowing into a manually constructed HTML string.
+You may be accidentally bypassi</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td><code>avoid_app_run_with_bad_host</code></td>
+<td><code>vuln-target/app2.py:163</code></td>
+<td>🟡 Medium</td>
+<td>Running flask app with host 0.0.0.0 could expose the server
+publicly.</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

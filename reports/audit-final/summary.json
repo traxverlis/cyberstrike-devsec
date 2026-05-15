@@ -1,0 +1,327 @@
+{
+  "target": "http://localhost:5001 + vuln-target/app2.py",
+  "level": 2,
+  "findings": [
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+      "severity": "medium",
+      "description": "User-controlled data from a request is passed to 'execute()'. This could lead to a SQL injection and therefore protected information could be leaked. Instead, use django's QuerySets, which are built w",
+      "file": "vuln-target/app2.py",
+      "line": 70,
+      "url": "vuln-target/app2.py:70"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+      "severity": "medium",
+      "description": "User-controlled data from a request is passed to 'execute()'. This could lead to a SQL injection and therefore protected information could be leaked. Instead, use django's QuerySets, which are built w",
+      "file": "vuln-target/app2.py",
+      "line": 71,
+      "url": "vuln-target/app2.py:71"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+      "severity": "high",
+      "description": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injectio",
+      "file": "vuln-target/app2.py",
+      "line": 74,
+      "url": "vuln-target/app2.py:74"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 80,
+      "url": "vuln-target/app2.py:80"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 80,
+      "url": "vuln-target/app2.py:80"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.audit.directly-returned-format-string.directly-returned-format-string",
+      "severity": "medium",
+      "description": "Detected Flask route directly returning a formatted string. This is subject to cross-site scripting if user input can reach the string. Consider using the template engine instead and rendering pages w",
+      "file": "vuln-target/app2.py",
+      "line": 81,
+      "url": "vuln-target/app2.py:81"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 81,
+      "url": "vuln-target/app2.py:81"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 81,
+      "url": "vuln-target/app2.py:81"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+      "severity": "medium",
+      "description": "User-controlled data from a request is passed to 'execute()'. This could lead to a SQL injection and therefore protected information could be leaked. Instead, use django's QuerySets, which are built w",
+      "file": "vuln-target/app2.py",
+      "line": 93,
+      "url": "vuln-target/app2.py:93"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+      "severity": "high",
+      "description": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injectio",
+      "file": "vuln-target/app2.py",
+      "line": 95,
+      "url": "vuln-target/app2.py:95"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 97,
+      "url": "vuln-target/app2.py:97"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 97,
+      "url": "vuln-target/app2.py:97"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.audit.directly-returned-format-string.directly-returned-format-string",
+      "severity": "medium",
+      "description": "Detected Flask route directly returning a formatted string. This is subject to cross-site scripting if user input can reach the string. Consider using the template engine instead and rendering pages w",
+      "file": "vuln-target/app2.py",
+      "line": 98,
+      "url": "vuln-target/app2.py:98"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 98,
+      "url": "vuln-target/app2.py:98"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 98,
+      "url": "vuln-target/app2.py:98"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+      "severity": "medium",
+      "description": "User-controlled data from a request is passed to 'execute()'. This could lead to a SQL injection and therefore protected information could be leaked. Instead, use django's QuerySets, which are built w",
+      "file": "vuln-target/app2.py",
+      "line": 127,
+      "url": "vuln-target/app2.py:127"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+      "severity": "high",
+      "description": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injectio",
+      "file": "vuln-target/app2.py",
+      "line": 130,
+      "url": "vuln-target/app2.py:130"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 133,
+      "url": "vuln-target/app2.py:133"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 133,
+      "url": "vuln-target/app2.py:133"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 134,
+      "url": "vuln-target/app2.py:134"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 134,
+      "url": "vuln-target/app2.py:134"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 136,
+      "url": "vuln-target/app2.py:136"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 136,
+      "url": "vuln-target/app2.py:136"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.audit.directly-returned-format-string.directly-returned-format-string",
+      "severity": "medium",
+      "description": "Detected Flask route directly returning a formatted string. This is subject to cross-site scripting if user input can reach the string. Consider using the template engine instead and rendering pages w",
+      "file": "vuln-target/app2.py",
+      "line": 138,
+      "url": "vuln-target/app2.py:138"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.django.security.injection.raw-html-format.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 138,
+      "url": "vuln-target/app2.py:138"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.injection.raw-html-concat.raw-html-format",
+      "severity": "medium",
+      "description": "Detected user input flowing into a manually constructed HTML string. You may be accidentally bypassing secure methods of rendering HTML by manually constructing HTML and this could create a cross-site",
+      "file": "vuln-target/app2.py",
+      "line": 138,
+      "url": "vuln-target/app2.py:138"
+    },
+    {
+      "tool": "semgrep",
+      "id": "python.flask.security.audit.app-run-param-config.avoid_app_run_with_bad_host",
+      "severity": "medium",
+      "description": "Running flask app with host 0.0.0.0 could expose the server publicly.",
+      "file": "vuln-target/app2.py",
+      "line": 163,
+      "url": "vuln-target/app2.py:163"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "tools/jwt-tool.yaml",
+      "line": 164,
+      "url": "tools/jwt-tool.yaml:164"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "tools/jwt-tool.yaml",
+      "line": 171,
+      "url": "tools/jwt-tool.yaml:171"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "vuln-target/app.py",
+      "line": 24,
+      "url": "vuln-target/app.py:24"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "vuln-target/app.py",
+      "line": 26,
+      "url": "vuln-target/app.py:26"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "vuln-target/app.py",
+      "line": 191,
+      "url": "vuln-target/app.py:191"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "agents/devsec-quick-scan.md",
+      "line": 289,
+      "url": "agents/devsec-quick-scan.md:289"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "reports/templates/devsec-full-report.md",
+      "line": 214,
+      "url": "reports/templates/devsec-full-report.md:214"
+    },
+    {
+      "tool": "gitleaks",
+      "id": "generic-api-key",
+      "severity": "critical",
+      "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "file": "docs/remediation-guide.md",
+      "line": 603,
+      "url": "docs/remediation-guide.md:603"
+    }
+  ],
+  "total_findings": 35,
+  "by_severity": {
+    "medium": 24,
+    "high": 3,
+    "critical": 8
+  }
+}

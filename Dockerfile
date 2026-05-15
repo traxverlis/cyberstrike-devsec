@@ -34,7 +34,6 @@ RUN apt-get update -qq && apt-get install -y -qq \
     # Outils SMB
     samba-common-bin \
     # Wordlists
-    wordlists \
     # Divers
     netcat-openbsd dnsutils whois \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -127,7 +126,7 @@ RUN curl -sSfL https://testssl.sh/testssl.sh -o /usr/local/bin/testssl.sh \
 
 # ── enum4linux-ng ─────────────────────────────────────────────────────────────
 RUN curl -sSfL \
-    https://raw.githubusercontent.com/cddmp/enum4linux-ng/main/enum4linux-ng.py \
+    https://raw.githubusercontent.com/cddmp/enum4linux-ng/master/enum4linux-ng.py \
     -o /usr/local/bin/enum4linux-ng.py \
     && echo '#!/bin/bash\npython3 /usr/local/bin/enum4linux-ng.py "$@"' \
     > /usr/local/bin/enum4linux \

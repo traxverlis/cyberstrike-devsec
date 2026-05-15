@@ -1,0 +1,17 @@
+{
+  "consent_id": "00EF0815-40EA-4056-89EA-62E1F6F318DA",
+  "target": "http://localhost:5001",
+  "scope": "/*",
+  "valid_until": "2026-06-15",
+  "test_types": [
+    "recon",
+    "headers",
+    "nikto",
+    "nmap",
+    "xss",
+    "sqli"
+  ],
+  "verified_at": "2026-05-15 13:55:01 UTC",
+  "hash": "86e54b2aee5183cdf2ef22debe387b343d47e2c7b9c1228447e5b6f6f4a7e9a8",
+  "status": "APPROVED"
+}
