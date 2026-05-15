@@ -196,11 +196,10 @@ def get_scan_commands(args: argparse.Namespace, output_dir: Path) -> list[dict[s
                 "description": "Port scan (nmap)",
                 "cmd": [
                     "nmap", "-sV", "-sC",
-                    "--script", "vuln",
-                    "-oJ", str(raw_dir / "nmap-results.json"),
+                    "-oX", str(raw_dir / "nmap-results.xml"),
                     target,
                 ],
-                "output_file": raw_dir / "nmap-results.json",
+                "output_file": raw_dir / "nmap-results.xml",
             },
             {
                 "name": "nuclei-web",

@@ -471,14 +471,14 @@ EOF
 echo "Report written to: $OUTPUT"
 ```
 
-### Using the Makefile
+### Générer un rapport manuellement
 
 ```bash
-# Quick report
-make report TARGET=./my-project OUTPUT=./reports/scan-$(date +%Y%m%d).md
-
-# Share via file
-cat ./reports/scan-$(date +%Y%m%d).md
+export PATH="$PATH:$HOME/.local/bin"
+python3 scripts/generate-report.py \
+  --results-dir ./security-reports \
+  --output ./security-reports/report.pdf \
+  --level 1 --format pdf
 ```
 
 ---

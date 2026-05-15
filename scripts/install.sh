@@ -455,14 +455,13 @@ if [[ ${#FAILED_TOOLS[@]} -gt 0 ]]; then
   echo "  Quick fixes:"
   echo "  • Run with sudo if permission errors"
   echo "  • Check your internet connection"
-  echo "  • Try: make install-tools (alternative method)"
   exit 1
 else
   success "CyberStrikeAI DevSec is ready! 🛡️"
   echo ""
   echo "  Next steps:"
   echo "  • Scan your project : ./scripts/scan.sh --target ./your-project"
-  echo "  • Or via Make       : make scan-full TARGET=./your-project"
-  echo "  • Verify tools      : make verify"
+  echo "  • Scan your project : ./scripts/scan.sh"
+  echo "  • Verify tools      : voir INSTALL.md"
   echo ""
 fi

@@ -7,6 +7,50 @@ Version scheme: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.1.0] — 2026-05-15
+
+### Fixed
+- **`generate-report.py`** : ajout des parseurs semgrep, gitleaks, grype, trivy, checkov, trufflehog (rapport était vide — 0 findings affichés avant correction)
+- **`generate-report.py`** : génération PDF via weasyprint (plus besoin de xelatex/LaTeX)
+- **`devsec-pipeline.py`** : `--level` ne passait plus à `verify-consent.py` — corrigé
+- **`devsec-pipeline.py`** : nmap utilisait `-oJ` inexistant — remplacé par `-oX` (XML)
+- **`scripts/scan-web.sh`** : nouveau script simplifié Level 2 (lit `devsec.conf`)
+- **`devsec.conf`** : fichier de config central (plus de Makefile)
+
+### Removed
+- **`Makefile`** : supprimé — remplacé par `devsec.conf` + scripts directs
+- **`scripts/make.bat`** : supprimé
+
+### Documentation
+- `README.md` : réécrit complètement (plus de références make, ajout IA, devsec.conf, scan-web.sh)
+- `INSTALL.md` : guide débutant de zéro, toutes commandes incluses
+- `USAGE.md` : guide d'utilisation complet avec section IA
+- `config.example.yaml` : format corrigé (plat, compatible parseur)
+- `docs/installation.md` : marqué déprécié → pointer vers INSTALL.md
+
+---
+
+## [3.0.0] — 2026-05-15
+
+### Added
+- **`scripts/ai_analyzer.py`** : module d'analyse IA OpenAI-compatible
+  - Triage intelligent (faux positifs / vrais positifs)
+  - Top 5 failles avec exemples de fix en code
+  - Synthèse exécutive pour RSSI/CTO
+  - Plan de remédiation classé effort/impact
+- **`config.yaml`** : configuration provider IA (format à plat)
+- **`scripts/copilot-token.sh`** : récupère le token Copilot depuis OpenClaw
+- **Flag `--ai`** dans `scan.sh` et `devsec-pipeline.py`
+- **Génération PDF automatique** en fin de scan (pandoc + weasyprint)
+- **`vuln-target/app.py`** : site Flask vulnérable v1 (SQLi, XSS, secrets, path traversal, cmd injection)
+- **`vuln-target/app2.py`** : site Flask vulnérable v2 (SQLi, XSS stocké, IDOR, auth bypass)
+
+### Changed
+- `devsec-pipeline.py` : génère MD + HTML + PDF en fin de pipeline
+- `scan.sh` : génère MD + HTML + PDF en fin de scan
+
+---
+
 ## [2.0.0] — 2026-05-14
 
 ### Added — Level 2: Active Light Scan

@@ -67,7 +67,7 @@ cd cyberstrike-devsec
 ls
 ```
 
-Tu dois voir : `README.md`, `scripts/`, `agents/`, `skills/`, `tools/`, `Makefile`, etc.
+Tu dois voir : `README.md`, `scripts/`, `agents/`, `skills/`, `tools/`, `devsec.conf`, etc.
 
 ---
 
@@ -233,12 +233,6 @@ done
 ```
 
 **Résultat attendu :** tous les outils marqués ✅.
-
-Tu peux aussi utiliser la cible Make dédiée :
-
-```bash
-make verify
-```
 
 ---
 

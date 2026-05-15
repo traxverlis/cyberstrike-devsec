@@ -1,43 +1,39 @@
-# AI Provider Configuration Examples
+# config.example.yaml — Exemples de configuration provider IA
+# ──────────────────────────────────────────────────────────────
+# Copier le bloc de ton provider dans config.yaml
+# IMPORTANT : format à plat uniquement (pas de sous-niveau "ai:")
 
-## GitHub Copilot (recommended — zero extra cost)
-ai:
-  provider: "openai-compatible"
-  base_url: "https://api.githubcopilot.com"
-  api_key: "${GITHUB_COPILOT_TOKEN}"
-  model: "claude-sonnet-4.5"
-  temperature: 0.1
-  max_tokens: 4096
+# ── GitHub Copilot (recommandé — inclus dans l'abonnement) ───
+# base_url: "https://api.business.githubcopilot.com"
+# api_key: "${GITHUB_COPILOT_TOKEN}"
+# model: "gpt-4o"
+# temperature: 0.1
+# max_tokens: 4096
 
-## OpenAI
-# ai:
-#   provider: "openai"
-#   api_key: "${OPENAI_API_KEY}"
-#   model: "gpt-4o"
+# ── OpenAI ───────────────────────────────────────────────────
+# base_url: "https://api.openai.com/v1"
+# api_key: "${OPENAI_API_KEY}"
+# model: "gpt-4o"
+# temperature: 0.1
+# max_tokens: 4096
 
-## Anthropic (direct)
-# ai:
-#   provider: "anthropic"
-#   api_key: "${ANTHROPIC_API_KEY}"
-#   model: "claude-sonnet-4-5"
+# ── Ollama (local, 0 coût, 0 internet) ───────────────────────
+# base_url: "http://localhost:11434/v1"
+# api_key: "ollama"
+# model: "llama3:8b"
+# temperature: 0.1
+# max_tokens: 4096
 
-## Ollama (local, no cost, no internet)
-# ai:
-#   provider: "openai-compatible"
-#   base_url: "http://localhost:11434/v1"
-#   api_key: "ollama"
-#   model: "qwen2.5-coder:7b"
+# ── Anthropic (Claude) ────────────────────────────────────────
+# base_url: "https://api.anthropic.com/v1"
+# api_key: "${ANTHROPIC_API_KEY}"
+# model: "claude-sonnet-4-5"
+# temperature: 0.1
+# max_tokens: 4096
 
-## DeepSeek
-# ai:
-#   provider: "openai-compatible"
-#   base_url: "https://api.deepseek.com/v1"
-#   api_key: "${DEEPSEEK_API_KEY}"
-#   model: "deepseek-coder"
-
-## Azure OpenAI
-# ai:
-#   provider: "openai-compatible"
-#   base_url: "https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/openai/deployments/${AZURE_DEPLOYMENT}"
-#   api_key: "${AZURE_OPENAI_API_KEY}"
-#   model: "gpt-4o"
+# ── DeepSeek ─────────────────────────────────────────────────
+# base_url: "https://api.deepseek.com/v1"
+# api_key: "${DEEPSEEK_API_KEY}"
+# model: "deepseek-coder"
+# temperature: 0.1
+# max_tokens: 4096

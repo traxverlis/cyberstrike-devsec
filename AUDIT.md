@@ -173,17 +173,20 @@ EOF
 ./scripts/install.sh
 
 # 4. Verify installation
-make verify
+```bash
+export PATH="$PATH:$HOME/.local/bin"
+for tool in grype trivy semgrep gitleaks; do command -v $tool &>/dev/null && echo "2705 $tool" || echo "274c $tool"; done
+```
 
 # 5. Run your first scan
 ./scripts/scan.sh --target ./your-project --mode full
 
 # 6. Or use Make
-make scan-full TARGET=./your-project
+./scripts/scan.sh --target ./your-project --mode full
 
 # 7. Or use Docker (no local install required)
 docker compose up -d
-make docker-scan TARGET=./your-project
+docker compose run --rm trivy dir:/workspace
 ```
 
 ---

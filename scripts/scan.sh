@@ -492,6 +492,8 @@ PYEOF
 
     AI_CONFIG_ARG=""
     [[ -n "$AI_CONFIG" ]] && AI_CONFIG_ARG="--config $AI_CONFIG"
+    AI_MODEL_ARG=""
+    [[ -n "$AI_MODEL_FROM_CONF" ]] && AI_MODEL_ARG="--level 1" # model lu depuis config.yaml
     python3 "$AI_SCRIPT" --findings "$AI_SUMMARY" $AI_CONFIG_ARG --output "$AI_OUT" --level 1 --verbose
 
     if [[ -f "$AI_OUT" ]]; then
@@ -521,7 +523,7 @@ if [[ "$TOTAL_BLOCKERS" -gt 0 ]]; then
   [[ "$SECRETS" -gt 0 ]] && echo -e "  ${RED}• CRITICAL: $SECRETS secret(s) exposed — rotate immediately${RESET}"
   [[ "$CRITICAL" -gt 0 ]] && echo -e "  ${RED}• CRITICAL: $CRITICAL critical CVE(s) — update dependencies${RESET}"
   echo ""
-  echo "  Run deep analysis: make scan-full TARGET=$TARGET"
+  echo "  Run deep analysis: ./scripts/scan.sh --target $TARGET --mode full"
   exit 1
 else
   if [[ "$HIGH" -gt 0 ]] || [[ "$SAST_ERRORS" -gt 0 ]]; then

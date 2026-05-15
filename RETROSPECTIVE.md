@@ -21,7 +21,7 @@ A complete, production-ready **multi-level DevSec security analysis module** for
 - `requirements.txt` — Aggregate Python dependencies
 - `config.example.yaml` — Example configuration
 - `docker-compose.yml` — Containerized environment (all 3 levels)
-- `Makefile` — Make targets for all 3 levels + consent workflow
+- `scripts/scan.sh` + `scripts/scan-web.sh` — scripts de scan directs
 - `.gitignore` — Excludes __pycache__, *.pdf, consent-token.json, results/
 
 **GitHub Actions CI/CD**
@@ -348,7 +348,6 @@ Total tracked files: ~95 (excluding .git/, results/, __pycache__)
 - `cyberstrike/cyberstrike-ai:latest` Docker image must be available (or built locally)
 - `pandoc` + `wkhtmltopdf` required for PDF report generation from Markdown
 - Java 11+ required for OWASP Dependency-Check Maven plugin
-- Docker required for `make docker-scan` targets
 
 ### Tool-Specific Limitations
 - COBOL SAST is grep-based; no semantic analysis (no dedicated COBOL SAST engine available)
