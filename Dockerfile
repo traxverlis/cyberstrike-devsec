@@ -9,7 +9,7 @@ FROM ubuntu:24.04
 
 LABEL maintainer="CyberStrikeAI DevSec"
 LABEL description="All-in-one security scanning container — PTES methodology"
-LABEL version="3.2.0"
+LABEL version="3.3.0"
 
 # Éviter les prompts interactifs apt
 ENV DEBIAN_FRONTEND=noninteractive
@@ -134,6 +134,20 @@ RUN curl -sSfL \
 
 # ── sqlmap ────────────────────────────────────────────────────────────────────
 RUN pipx install sqlmap
+
+# ── OWASP ZAP (Level 3 — scan actif complet) ──────────────────────────────────
+RUN apt-get update -qq && apt-get install -y -qq openjdk-17-jre-headless \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN ZAP_VER=$(curl -s https://api.github.com/repos/zaproxy/zaproxy/releases/latest | jq -r '.tag_name') \
+    && ZAP_NUM="${ZAP_VER#v}" \
+    && curl -sSfL \
+    "https://github.com/zaproxy/zaproxy/releases/download/${ZAP_VER}/ZAP_${ZAP_NUM}_Linux.tar.gz" \
+    -o /tmp/zap.tar.gz \
+    && tar -xz -C /opt -f /tmp/zap.tar.gz \
+    && mv /opt/ZAP_${ZAP_NUM} /opt/zaproxy \
+    && ln -sf /opt/zaproxy/zap.sh /usr/local/bin/zaproxy \
+    && find /opt/zaproxy -name "zap-baseline.py" -exec ln -sf {} /usr/local/bin/zap-baseline.py \; 2>/dev/null || true \
+    && rm -f /tmp/zap.tar.gz
 
 # ── Wapiti ────────────────────────────────────────────────────────────────────
 RUN pipx install wapiti3

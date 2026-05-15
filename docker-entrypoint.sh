@@ -24,7 +24,7 @@ shift || true
 banner() {
   echo -e "${BOLD}${CYAN}"
   echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║     CyberStrikeAI DevSec — Container v3.2.0  🐳     ║"
+  echo "  ║     CyberStrikeAI DevSec — Container v3.3.0  🐳     ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo -e "${RESET}"
 }
@@ -79,7 +79,7 @@ case "$COMMAND" in
     PASS=0; FAIL=0
     for tool in grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit \
                 nuclei nikto testssl.sh nmap whatweb gobuster dirb feroxbuster dalfox \
-                subfinder hydra wapiti ffuf sqlmap enum4linux pandoc weasyprint; do
+                subfinder hydra wapiti ffuf sqlmap enum4linux pandoc weasyprint zaproxy; do
       if command -v "$tool" &>/dev/null; then
         VER=$(${tool} --version 2>&1 | head -1 || echo "ok")
         printf "  ${GREEN}✅${RESET}  %-20s %s\n" "$tool" "${VER:0:40}"
