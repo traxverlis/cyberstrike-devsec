@@ -85,7 +85,12 @@ class ToolLoader:
         binary = tool.get("command") or tool.get("binary") or tool.get("name")
         if not binary:
             return False
-        return shutil.which(str(binary)) is not None
+        # Chercher le binaire exact, puis le nom de l'outil sans suffixe
+        if shutil.which(str(binary)):
+            return True
+        # Fallback : essayer le nom sans tiret (ex: nuclei-exploit → nuclei)
+        base = str(binary).split("-")[0]
+        return shutil.which(base) is not None
 
     def build_command(self, tool: dict, params: dict) -> list[str]:
         """
@@ -151,8 +156,9 @@ class ToolLoader:
             "whatweb", "subfinder", "gobuster", "wapiti",
         ]
         level3_tools = level2_tools + [
-            "nuclei-exploit", "sqlmap", "ffuf", "zaproxy",
+            "nuclei-exploit", "sqlmap", "ffuf",
             "dalfox", "hydra", "feroxbuster",
+            "zaproxy",  # optionnel — nécessite Java + ZAP
         ]
 
         mapping = {1: level1_tools, 2: level2_tools, 3: level3_tools}

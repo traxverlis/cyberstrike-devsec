@@ -441,6 +441,32 @@ Phase 5 — Exploitation (Level 3 uniquement)
   hydra        → brute-force SSH/FTP/RDP découverts par nmap
 ```
 
+### Niveau 3 — Pentest complet (Level 3)
+
+```bash
+export PATH="$PATH:$HOME/.local/bin"
+
+# Level 3 — consentement signé OBLIGATOIRE + confirmation
+python3 scripts/devsec-pipeline.py \
+  --target "https://app.client.com" \
+  --level 3 \
+  --consent "reports/consent/consent-signed.pdf" \
+  --confirm \          # non-interactif (CI/CD, scripts)
+  --output "reports/pentest-$(date +%Y%m%d)"
+
+# Outils Level 3 activés en plus du Level 2 :
+#   sqlmap    → exploitation SQLi automatique
+#   ffuf      → fuzzing endpoints et paramètres
+#   dalfox    → exploitation XSS
+#   hydra     → brute-force SSH/FTP/RDP
+#   feroxbuster → discovery récursif profond
+#   nuclei    → templates exploitation CVE
+#   zaproxy   → scan actif OWASP ZAP (optionnel, nécessite Java)
+```
+
+> ⚠️ **ZAP** : nécessite Java. Installation recommandée via Docker :
+> `docker run --rm ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://target`
+
 ### devsec-pipeline.py (Niveau 2 & 3)
 
 ```

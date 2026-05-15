@@ -25,6 +25,7 @@ OUTPUT=""
 AI_MODE=false
 AI_MODEL_FROM_CONF="gpt-4o"
 DOCKER_MODE=false
+CONFIRM_L3=false
 
 # ── Charger devsec.conf ───────────────────────────────────────────────────────
 CONF="$(dirname "$0")/../devsec.conf"
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --target)  TARGET_URL="$2"; shift 2 ;;
     --consent) CONSENT="$2"; shift 2 ;;
     --output)  OUTPUT="$2"; shift 2 ;;
+    --confirm) CONFIRM_L3=true; shift ;;
     --docker)  DOCKER_MODE=true; shift ;;
     --ai)      AI_MODE=true; shift ;;
     --help|-h)
@@ -94,6 +96,7 @@ if [[ "$DOCKER_MODE" == "true" ]]; then
   [[ -n "${GITHUB_COPILOT_TOKEN:-}" ]] && DOCKER_ARGS+=("-e" "GITHUB_COPILOT_TOKEN=${GITHUB_COPILOT_TOKEN}")
 
   SCAN_ARGS=("scan-web" "--target" "$TARGET_URL" "--consent" "/reports/consent-signed.pdf" "--output" "/reports")
+  [[ "$CONFIRM_L3" == "true" ]] && SCAN_ARGS+=("--confirm")
   [[ "$AI_MODE" == "true" ]] && SCAN_ARGS+=("--ai")
 
   exec docker run "${DOCKER_ARGS[@]}" cyberstrike-devsec:latest "${SCAN_ARGS[@]}"

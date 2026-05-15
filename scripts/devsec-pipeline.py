@@ -116,6 +116,8 @@ Examples:
     parser.add_argument("--notify-email", default=None, help="Email address for report notification")
     parser.add_argument("--operator", default=os.getenv("USER", "unknown"), help="Operator name for audit trail")
     parser.add_argument("--dry-run", action="store_true", help="Parse and validate without running scans")
+    parser.add_argument("--confirm", action="store_true",
+                        help="Auto-confirm Level 3 pentest (non-interactive, CI/CD use)")
     return parser.parse_args()
 
 
@@ -236,14 +238,58 @@ def get_scan_commands(args: argparse.Namespace, output_dir: Path) -> list[dict[s
             },
         ]
     if args.level >= 3:
-        scans += [
-            {
-                "name": "zaproxy-active",
-                "description": "Active web app scan (OWASP ZAP)",
-                "cmd": ["zap-baseline.py", "-t", target, "-J", str(raw_dir / "zap-results.json"), "-l", "WARN"],
-                "output_file": raw_dir / "zap-results.json",
-            },
-        ]
+        # Level 3 — exploitation tools via ToolLoader
+        l3_tools = {
+            "sqlmap": ["sqlmap", "-u", target, "--batch", "--level=2", "--risk=1",
+                       "--output-dir", str(raw_dir / "sqlmap"), "--format=json"],
+            "ffuf":   ["ffuf", "-u", f"{target}/FUZZ",
+                       "-w", "/usr/share/wordlists/dirb/common.txt",
+                       "-o", str(raw_dir / "ffuf-results.json"), "-of", "json",
+                       "-mc", "200,301,302,401,403", "-t", "50", "-timeout", "5"],
+            "dalfox": ["dalfox", "url", target,
+                       "--output-format", "json", "-o", str(raw_dir / "dalfox-results.json"),
+                       "--skip-bav", "--timeout", "10"],
+            "feroxbuster": ["feroxbuster", "--url", target,
+                            "--output", str(raw_dir / "feroxbuster-l3.json"),
+                            "--format", "json", "--depth", "4", "--silent",
+                            "--wordlist", "/usr/share/wordlists/dirb/common.txt"],
+            "hydra":  None,  # Skipped sans cibles connues — lancé par PTESEngine Phase 5
+        }
+        for tool_name, cmd in l3_tools.items():
+            if cmd is None:
+                continue
+            if not shutil.which(cmd[0]):
+                continue
+            out_file = raw_dir / f"{tool_name}-results.json"
+            tool = _tool_loader.load_tool(tool_name) if _tool_loader else None
+            desc = (tool or {}).get("short_description", f"{tool_name} scan") if tool else f"{tool_name} scan"
+            scans.append({
+                "name": f"l3-{tool_name}",
+                "description": desc,
+                "cmd": cmd,
+                "output_file": out_file,
+            })
+        # ZAP si disponible
+        for zap_bin in ["zaproxy", "zap-baseline.py", "zap.sh"]:
+            if shutil.which(zap_bin):
+                out = raw_dir / "zap-results.json"
+                scans.append({
+                    "name": "l3-zaproxy",
+                    "description": "OWASP ZAP active scan",
+                    "cmd": [zap_bin, "-t", target, "-J", str(out), "-l", "WARN"],
+                    "output_file": out,
+                })
+                break
+        # nuclei templates exploit
+        if shutil.which("nuclei"):
+            out = raw_dir / "nuclei-exploit-results.json"
+            scans.append({
+                "name": "l3-nuclei-exploit",
+                "description": "Nuclei exploitation templates (high/critical)",
+                "cmd": ["nuclei", "-u", target, "-json", "-o", str(out),
+                        "-severity", "high,critical", "-no-interactsh", "-silent"],
+                "output_file": out,
+            })
     return scans
 
 
@@ -585,10 +631,13 @@ async def main() -> int:
             border_style="red",
         ))
         if not args.dry_run:
-            confirmation = input("> ").strip()
-            if confirmation != "CONFIRM":
-                console.print("[red]❌ Confirmation not received. Aborting.[/red]")
-                return EXIT_CONSENT_INVALID
+            if getattr(args, 'confirm', False):
+                console.print("[yellow]⚠  Auto-confirmed via --confirm flag[/yellow]")
+            else:
+                confirmation = input("> ").strip()
+                if confirmation != "CONFIRM":
+                    console.print("[red]❌ Confirmation not received. Aborting.[/red]")
+                    return EXIT_CONSENT_INVALID
         else:
             console.print("[dim](dry-run: skipping confirmation)[/dim]")
 
