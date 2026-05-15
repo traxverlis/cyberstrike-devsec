@@ -7,6 +7,33 @@ Version scheme: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.3.0] — 2026-05-15
+
+### Added — Mode Docker tout-en-un
+
+- **`Dockerfile`** : image Ubuntu 24.04 avec 25+ outils préinstallés
+  - Tous les outils de scan (grype, trivy, semgrep, gitleaks, trufflehog, syft,
+    osv-scanner, checkov, nuclei, nikto, testssl.sh, nmap, whatweb, gobuster,
+    dirb, feroxbuster, dalfox, subfinder, hydra, wapiti, ffuf, sqlmap, enum4linux)
+  - Dépendances Python du projet incluses
+  - pandoc + weasyprint pour la génération PDF
+- **`docker-entrypoint.sh`** : point d'entrée avec commandes :
+  `scan`, `scan-web`, `pipeline`, `consent`, `verify-consent`, `report`, `verify`, `shell`
+- **`docker-compose.yml`** : service unique `devsec` + profil `ci`
+- **`.env.example`** : template de configuration Docker
+- **`scripts/scan.sh`** : flag `--docker` (auto-conteneur)
+- **`scripts/scan-web.sh`** : flag `--docker` (auto-conteneur)
+- **`tools/nuclei.yaml`** : YAML manquant pour l'outil nuclei (36 YAMLs total)
+
+### Documentation
+- `USAGE.md` : section 8 "Mode Docker"
+- `COMMANDS.md` : réécrit entièrement — référence complète de toutes les commandes
+- `README.md` : section Docker avec exemples Linux/macOS/Windows
+- `INSTALL.md` : section "Alternative : Mode Docker"
+- `CHANGELOG.md` : historique complet v1.0.0 → v3.3.0
+
+---
+
 ## [3.2.0] — 2026-05-15
 
 ### Added — Moteur PTES + 7 nouveaux outils

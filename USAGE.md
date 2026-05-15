@@ -529,7 +529,85 @@ done
 
 ---
 
-## 8. Mode avec IA — GitHub Copilot
+## 8. Mode Docker (sans installation locale)
+
+Le mode Docker permet de lancer tous les scans **sans rien installer** sur ta machine.
+Fonctionne sur Windows, macOS et Linux.
+
+### Prérequis
+
+- [Docker Desktop](https://docs.docker.com/get-docker/) installé et démarré
+
+### Construction de l'image (une seule fois)
+
+```bash
+# Cloner le projet
+git clone https://github.com/traxverlis/cyberstrike-devsec.git
+cd cyberstrike-devsec
+
+# Construire l'image (~10-15 minutes la première fois)
+docker build -t cyberstrike-devsec .
+
+# Vérifier que les 25+ outils sont bien installés
+docker run --rm cyberstrike-devsec verify
+```
+
+### Scan d'un projet (Level 1)
+
+```bash
+# Linux / macOS
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v $(pwd)/reports:/reports \
+  cyberstrike-devsec scan --mode full --output /reports
+
+# Windows PowerShell
+docker run --rm `
+  -v ${PWD}:/workspace `
+  -v ${PWD}/reports:/reports `
+  cyberstrike-devsec scan --mode full --output /reports
+```
+
+### Scan d'un site web (Level 2)
+
+```bash
+docker run --rm \
+  -v $(pwd)/reports:/reports \
+  --network=host \
+  cyberstrike-devsec scan-web \
+    --target https://app.exemple.com \
+    --consent /reports/consent-signed.pdf
+```
+
+### Avec l'analyse IA
+
+```bash
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e GITHUB_COPILOT_TOKEN="ton-token" \
+  cyberstrike-devsec scan --mode full --ai
+```
+
+### Avec docker compose
+
+```bash
+cp .env.example .env
+# Éditer .env (PROJECT_PATH, GITHUB_COPILOT_TOKEN...)
+docker compose run devsec scan --mode full
+docker compose run devsec verify
+```
+
+### Flag --docker (auto-conteneur)
+
+```bash
+# Utilise les scripts normaux — lance automatiquement dans Docker
+./scripts/scan.sh --docker --mode full
+./scripts/scan-web.sh --docker --target https://app.exemple.com
+```
+
+---
+
+## 9. Mode avec IA — GitHub Copilot
 
 Par défaut, les scans tournent **sans IA** — les outils (grype, semgrep, gitleaks...) font leur travail et génèrent un rapport.
 

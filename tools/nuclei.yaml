@@ -1,0 +1,94 @@
+name: "nuclei"
+command: "nuclei"
+enabled: true
+short_description: "Fast web vulnerability scanner using community-curated templates (CVE, misconfigs, exposures)"
+description: |
+  Nuclei is a fast, template-based vulnerability scanner that uses YAML-based
+  templates to detect vulnerabilities, misconfigurations, and exposures across
+  web applications, networks, DNS, and more. It has 9000+ community templates.
+
+  **Main features:**
+  - 9000+ templates covering CVEs, misconfigurations, exposures, fuzzing
+  - Passive (informational) and active (exploitation) modes
+  - Bulk URL scanning from file or stdin
+  - Custom template support
+  - JSONL output for pipeline integration
+
+  **PTES phases:** 4 — Vulnerability Analysis, 5 — Exploitation
+
+  ⚠️ Active templates generate HTTP traffic — written authorization required.
+
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Single target URL (e.g. https://example.com)"
+    required: false
+    flag: "-u"
+    format: "flag"
+
+  - name: "list"
+    type: "string"
+    description: "File containing list of target URLs (one per line)"
+    required: false
+    flag: "-l"
+    format: "flag"
+
+  - name: "templates"
+    type: "string"
+    description: "Template directories or files to use (default: all)"
+    required: false
+    flag: "-t"
+    format: "flag"
+
+  - name: "severity"
+    type: "string"
+    description: "Filter by severity: info,low,medium,high,critical (comma-separated)"
+    required: false
+    flag: "-severity"
+    format: "flag"
+    default: "medium,high,critical"
+
+  - name: "output"
+    type: "string"
+    description: "Output file path for results"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "json"
+    type: "bool"
+    description: "Output in JSONL format"
+    required: false
+    flag: "-json"
+    format: "flag"
+    default: true
+
+  - name: "no-interactsh"
+    type: "bool"
+    description: "Disable interactsh server (out-of-band callbacks)"
+    required: false
+    flag: "-no-interactsh"
+    format: "flag"
+    default: true
+
+  - name: "silent"
+    type: "bool"
+    description: "Silent mode — only output findings"
+    required: false
+    flag: "-silent"
+    format: "flag"
+    default: true
+
+  - name: "rate-limit"
+    type: "int"
+    description: "Maximum requests per second"
+    required: false
+    flag: "-rate-limit"
+    format: "flag"
+    default: 150
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra nuclei arguments"
+    required: false
+    format: "positional"

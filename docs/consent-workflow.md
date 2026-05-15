@@ -300,3 +300,32 @@ Minimum **5 years** (matching the confidentiality obligation). Some compliance f
 | `scripts/consent/requirements.txt` | Python dependencies |
 | `reports/templates/consent-form.md` | Manual fallback template |
 | `reports/signed/` | Store signed consent PDFs here |
+
+
+---
+
+## Lancement du scan avec scan-web.sh
+
+Une fois le consentement vérifié, utiliser `scan-web.sh` pour lancer le scan Level 2 :
+
+```bash
+# Via devsec.conf (recommandé)
+# CONSENT=./reports/consent/consent-signed.pdf dans devsec.conf
+./scripts/scan-web.sh
+
+# Ou directement
+./scripts/scan-web.sh \
+  --target https://app.exemple.com \
+  --consent reports/consent/consent-signed.pdf \
+  --output reports/scan-$(date +%Y%m%d)
+
+# Mode Docker
+docker run --rm \
+  -v $(pwd)/reports:/reports \
+  --network=host \
+  cyberstrike-devsec scan-web \
+    --target https://app.exemple.com \
+    --consent /reports/consent-signed.pdf
+```
+
+`scan-web.sh` vérifie automatiquement le consentement avant de lancer le pipeline PTES.

@@ -1003,3 +1003,68 @@ curl -X POST -H 'Content-type: application/json' \
   --data '{"text":"❌ Security scan failed on '"$BRANCH"' — Critical CVEs: '"$CRITICAL"'"}' \
   "$SLACK_WEBHOOK_URL"
 ```
+
+
+---
+
+## CI/CD avec Docker
+
+Pour les pipelines CI/CD, utiliser le mode Docker pour éviter toute installation :
+
+### GitHub Actions
+
+```yaml
+name: Security Scan
+on: [push, pull_request]
+
+jobs:
+  devsec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build DevSec image
+        run: docker build -t cyberstrike-devsec .
+
+      - name: Run security scan
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace:ro \
+            -v ${{ github.workspace }}/reports:/reports \
+            cyberstrike-devsec scan --mode cicd --output /reports
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: reports/
+```
+
+### GitLab CI
+
+```yaml
+security-scan:
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t cyberstrike-devsec .
+    - docker run --rm
+        -v $CI_PROJECT_DIR:/workspace:ro
+        -v $CI_PROJECT_DIR/reports:/reports
+        cyberstrike-devsec scan --mode cicd --output /reports
+  artifacts:
+    paths:
+      - reports/
+    when: always
+```
+
+### Script CI/CD direct (sans Docker)
+
+```bash
+export PATH="$PATH:$HOME/.local/bin"
+./scripts/scan.sh --target . --mode cicd --output ./reports
+echo "Exit code: $?"
+# 0 = PASS, 1 = CRITICAL findings, 2 = error
+```
