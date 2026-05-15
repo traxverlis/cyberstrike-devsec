@@ -109,7 +109,10 @@ Examples:
         default=None,
         help="Output directory for reports (default: ./reports/<timestamp>)",
     )
-    parser.add_argument("--consent", default=None, help="Path to signed consent PDF (required for level 2+)")
+    parser.add_argument("--consent", default=None, help="Path to signed consent PDF (required for level 2+ unless --dev)")
+    parser.add_argument("--dev", action="store_true",
+                        help="Mode développeur — scan ton propre projet sans consentement. "
+                             "Tous les niveaux disponibles. NE PAS utiliser sur des systèmes tiers.")
     parser.add_argument("--ai-model", default="claude-sonnet-4-5", help="AI model for analysis (default: claude-sonnet-4-5)")
     parser.add_argument("--ai", action="store_true", help="Enable AI-powered analysis (requires config.yaml or GITHUB_COPILOT_TOKEN env var)")
     parser.add_argument("--ai-config", default=None, type=Path, help="Path to config.yaml for AI provider (auto-detected if absent)")
@@ -601,20 +604,26 @@ async def main() -> int:
     console.print(f"  [bold]Level:[/bold]    {args.level}")
     console.print(f"  [bold]Operator:[/bold] {args.operator}")
     console.print(f"  [bold]Model:[/bold]    {args.ai_model}")
+    if getattr(args, 'dev', False):
+        console.print(f"  [bold yellow]Mode:[/bold yellow]     [yellow]⚡ DEV — scan de ton propre projet, consentement ignoré[/yellow]")
     console.print()
 
     # ── Consent verification (level 2+) ──────────────────────────────────────
     consent_id = ""
     if args.level >= 2:
         console.rule("[yellow]Step 1: Consent Verification[/yellow]")
-        if not args.consent:
-            console.print("[red]❌ --consent is required for level 2 and above.[/red]")
+        if getattr(args, 'dev', False):
+            console.print("[yellow]⚡ Mode DEV — consentement ignoré (scan de ton propre projet)[/yellow]")
+            consent_id = "dev-mode"
+        elif not args.consent:
+            console.print("[red]❌ --consent requis pour Level 2+.[/red]")
+            console.print("[dim]  Si tu scannes TON propre projet, utilise --dev pour bypasser.[/dim]")
             return EXIT_CONSENT_INVALID
-
-        ok, consent_id = verify_consent(args.consent, args.level)
-        if not ok:
-            console.print("[red]❌ Consent verification failed. Aborting.[/red]")
-            return EXIT_CONSENT_INVALID
+        else:
+            ok, consent_id = verify_consent(args.consent, args.level)
+            if not ok:
+                console.print("[red]❌ Consent verification failed. Aborting.[/red]")
+                return EXIT_CONSENT_INVALID
 
     # ── Level 3 double-verification + scope confirmation ──────────────────────
     if args.level == 3:
@@ -631,7 +640,9 @@ async def main() -> int:
             border_style="red",
         ))
         if not args.dry_run:
-            if getattr(args, 'confirm', False):
+            if getattr(args, 'dev', False):
+                console.print("[yellow]⚡ Mode DEV — confirmation Level 3 automatique[/yellow]")
+            elif getattr(args, 'confirm', False):
                 console.print("[yellow]⚠  Auto-confirmed via --confirm flag[/yellow]")
             else:
                 confirmation = input("> ").strip()

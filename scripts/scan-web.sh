@@ -26,6 +26,7 @@ AI_MODE=false
 AI_MODEL_FROM_CONF="gpt-4o"
 DOCKER_MODE=false
 CONFIRM_L3=false
+DEV_MODE=false
 
 # ── Charger devsec.conf ───────────────────────────────────────────────────────
 CONF="$(dirname "$0")/../devsec.conf"
@@ -55,10 +56,11 @@ while [[ $# -gt 0 ]]; do
     --consent) CONSENT="$2"; shift 2 ;;
     --output)  OUTPUT="$2"; shift 2 ;;
     --confirm) CONFIRM_L3=true; shift ;;
+    --dev)     DEV_MODE=true; shift ;;
     --docker)  DOCKER_MODE=true; shift ;;
     --ai)      AI_MODE=true; shift ;;
     --help|-h)
-      echo "Usage: ./scripts/scan-web.sh [--target URL] [--consent PDF] [--output DIR] [--ai] [--docker]"
+      echo "Usage: ./scripts/scan-web.sh [--target URL] [--consent PDF] [--output DIR] [--ai] [--docker] [--dev]"
       echo "Config par défaut dans devsec.conf"
       exit 0 ;;
     *) echo "Option inconnue: $1"; exit 1 ;;
@@ -97,13 +99,17 @@ if [[ "$DOCKER_MODE" == "true" ]]; then
 
   SCAN_ARGS=("scan-web" "--target" "$TARGET_URL" "--consent" "/reports/consent-signed.pdf" "--output" "/reports")
   [[ "$CONFIRM_L3" == "true" ]] && SCAN_ARGS+=("--confirm")
+  [[ "$DEV_MODE" == "true" ]]   && SCAN_ARGS+=("--dev")
   [[ "$AI_MODE" == "true" ]] && SCAN_ARGS+=("--ai")
 
   exec docker run "${DOCKER_ARGS[@]}" cyberstrike-devsec:latest "${SCAN_ARGS[@]}"
 fi
 
 # ── Vérifications préalables ──────────────────────────────────────────────────
-if [[ -z "$CONSENT" || ! -f "$CONSENT" ]]; then
+if [[ "$DEV_MODE" == "true" ]]; then
+  echo -e "${YELLOW}⚡ Mode DEV — consentement ignoré (scan de ton propre projet)${RESET}"
+  CONSENT=""
+elif [[ -z "$CONSENT" || ! -f "$CONSENT" ]]; then
   echo -e "${RED}❌ Document de consentement manquant ou introuvable : ${CONSENT:-'(non défini dans devsec.conf)'}${RESET}"
   echo ""
   echo -e "  Pour générer le document :"

@@ -44,6 +44,7 @@ AI_MODE=false
 AI_CONFIG=""
 AI_MODEL_FROM_CONF=""
 DOCKER_MODE=false
+DEV_FROM_CONF=false
 SCAN_START=$(date +%s)
 
 # ── Charger devsec.conf si présent ─────────────────────────────────────────
@@ -63,6 +64,7 @@ if [[ -f "$CONF" ]]; then
       NO_GIT)   [[ "$val" == "true" ]] && NO_GIT=true ;;
       AI)       [[ "$val" == "true" ]] && AI_MODE=true ;;
       AI_MODEL) AI_MODEL_FROM_CONF="$val" ;;
+      DEV_MODE) [[ "$val" == "true" ]] && DEV_FROM_CONF=true ;;
     esac
   done < "$CONF"
   echo -e "  \033[2m[devsec.conf chargé]\033[0m"
