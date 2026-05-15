@@ -454,21 +454,22 @@ Exemples :
   python3 scripts/generate-report.py --results-dir ./reports/scan/raw --output ./rapport.html --level 2 --format html
 ```
 
-### Commandes Make disponibles
+### Raccourcis disponibles
 
 ```bash
-make scan-quick   TARGET=./mon-projet         # Scan rapide (~30s, secrets + CVE critiques)
-make scan-full    TARGET=./mon-projet         # Scan complet (tous outils)
-make scan-cicd    TARGET=./mon-projet         # Scan CI/CD (JSON + exit codes stricts)
-make scan-secrets TARGET=./mon-projet         # Secrets seulement
-make scan-cve     TARGET=./mon-projet         # CVE seulement
-make scan-sast    TARGET=./mon-projet         # SAST seulement
-make scan-level2  TARGET_URL=https://...  CONSENT=./consent-signed.pdf
-make scan-level3  TARGET_URL=https://...  CONSENT=./consent-signed.pdf CONFIRM=yes
-make verify                                   # Vérifier les 13 outils installés
-make generate-consent TARGET_URL=https://...  # Générer document consent
-make verify-consent   CONSENT=./signed.pdf    # Vérifier document consent
-make audit-trail                              # Voir l'historique d'audit
+# Lancement simplifié (lit devsec.conf automatiquement)
+./scripts/scan.sh                              # Scan code source (Level 1)
+./scripts/scan-web.sh                         # Scan site web (Level 2)
+
+# Avec options ponctuelles (écrase devsec.conf)
+./scripts/scan.sh --target ./mon-projet --mode quick
+./scripts/scan.sh --target ./mon-projet --mode full --ai
+./scripts/scan-web.sh --target https://monsite.com --consent ./doc-signe.pdf
+
+# Vérifier les outils installés
+for tool in grype trivy semgrep gitleaks trufflehog nuclei nikto; do
+  command -v $tool &>/dev/null && echo "✅ $tool" || echo "❌ $tool"
+done
 ```
 
 ---

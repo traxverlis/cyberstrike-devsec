@@ -40,7 +40,30 @@ SEVERITY="high"
 NO_GIT=false
 AI_MODE=false
 AI_CONFIG=""
+AI_MODEL_FROM_CONF=""
 SCAN_START=$(date +%s)
+
+# ── Charger devsec.conf si présent ─────────────────────────────────────────
+CONF="$(dirname "$0")/../devsec.conf"
+[[ ! -f "$CONF" ]] && CONF="./devsec.conf"
+if [[ -f "$CONF" ]]; then
+  while IFS='=' read -r key val; do
+    [[ "$key" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$key" ]] && continue
+    key="${key// /}"
+    val="${val%%#*}"; val="${val//\"/ }"; val="${val//\'/}"; val="${val#"${val%%[![:space:]]*}"}"; val="${val%"${val##*[![:space:]]}"}"
+    case "$key" in
+      TARGET)   TARGET="$val" ;;
+      OUTPUT)   OUTPUT="$val" ;;
+      MODE)     MODE="$val" ;;
+      SEVERITY) SEVERITY="$val" ;;
+      NO_GIT)   [[ "$val" == "true" ]] && NO_GIT=true ;;
+      AI)       [[ "$val" == "true" ]] && AI_MODE=true ;;
+      AI_MODEL) AI_MODEL_FROM_CONF="$val" ;;
+    esac
+  done < "$CONF"
+  echo -e "  \033[2m[devsec.conf chargé]\033[0m"
+fi
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
