@@ -4,51 +4,12 @@ CyberStrikeAI DevSec — Option C Refactor
 """
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
-try:
-    import yaml as _yaml
-    def _load_yaml(text: str) -> dict:
-        return _yaml.safe_load(text)
-except ImportError:
-    # Fallback minimal YAML parser for simple key:value files
-    def _load_yaml(text: str) -> dict:  # type: ignore
-        import re
-        result = {}
-        current_key = None
-        current_list = None
-        for line in text.splitlines():
-            # Skip comments and empty lines
-            stripped = line.strip()
-            if not stripped or stripped.startswith('#'):
-                continue
-            # Detect list item under a key
-            if stripped.startswith('- ') and current_key:
-                if current_list is None:
-                    current_list = []
-                    result[current_key] = current_list
-                current_list.append(stripped[2:].strip())
-                continue
-            # Key: value
-            if ':' in stripped:
-                key, _, val = stripped.partition(':')
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                current_key = key
-                current_list = None
-                if val:
-                    # Try booleans and numbers
-                    if val.lower() == 'true':
-                        result[key] = True
-                    elif val.lower() == 'false':
-                        result[key] = False
-                    else:
-                        try:
-                            result[key] = int(val)
-                        except ValueError:
-                            result[key] = val
-        return result
+sys.path.insert(0, str(Path(__file__).parent))
+from yaml_utils import load_yaml as _load_yaml
 
 
 class ToolLoader:

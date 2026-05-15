@@ -83,8 +83,16 @@ def extract_field(text: str, label: str) -> str | None:
 
 
 def extract_hash(text: str) -> str | None:
-    """Find the first SHA-256 hex string (64 hex chars) in the text."""
+    """Find the first SHA-256 hex string (64 hex chars) in the text.
+    Handles whitespace that PDF extraction may introduce mid-hash."""
+    # First try without whitespace removal (exact match)
     m = re.search(r"\b([0-9a-f]{64})\b", text, re.IGNORECASE)
+    if m:
+        return m.group(1).lower()
+    # Fallback: remove whitespace from text and try again
+    # PDF text extraction sometimes breaks long hex strings across lines
+    stripped = re.sub(r"\s+", "", text)
+    m = re.search(r"([0-9a-f]{64})", stripped, re.IGNORECASE)
     return m.group(1).lower() if m else None
 
 

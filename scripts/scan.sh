@@ -233,12 +233,11 @@ fi
 echo -e "${BOLD}━━━ Scan 1/${STEPS}: Secret Detection ━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 if is_available gitleaks; then
-  GITLEAKS_OPTS="--source $TARGET --report-format json --report-path $OUTPUT/gitleaks.json --no-banner"
+  GITLEAKS_ARGS=(--source "$TARGET" --report-format json --report-path "$OUTPUT/gitleaks.json" --no-banner)
   if [[ "$NO_GIT" == "true" ]]; then
-    GITLEAKS_OPTS="$GITLEAKS_OPTS --no-git"
+    GITLEAKS_ARGS+=(--no-git)
   fi
-  # shellcheck disable=SC2086
-  gitleaks detect $GITLEAKS_OPTS --exit-code 0 2>/dev/null || true
+  gitleaks detect "${GITLEAKS_ARGS[@]}" --exit-code 0 2>/dev/null || true
   SECRETS=$(jq 'if type == "array" then length else 0 end' "$OUTPUT/gitleaks.json" 2>/dev/null || echo 0)
   if [[ "$SECRETS" -gt 0 ]]; then
     error "Secrets found: $SECRETS — rotate credentials immediately!"
@@ -311,21 +310,20 @@ fi
 echo -e "${BOLD}━━━ Scan 3/${STEPS}: OWASP SAST (Semgrep) ━━━━━━━━━━━━━━━━━━━${RESET}"
 
 if is_available semgrep; then
-  SEMGREP_CONFIGS="--config p/owasp-top-ten --config p/secrets"
+  SEMGREP_ARGS=(--config p/owasp-top-ten --config p/secrets)
 
   # Detect and add language-specific configs
   find "$TARGET" -name "*.cs" -o -name "*.csproj" | grep -q . 2>/dev/null \
-    && SEMGREP_CONFIGS="$SEMGREP_CONFIGS --config p/csharp --config p/dotnet"
+    && SEMGREP_ARGS+=(--config p/csharp --config p/dotnet)
   find "$TARGET" -name "*.java" | grep -q . 2>/dev/null \
-    && SEMGREP_CONFIGS="$SEMGREP_CONFIGS --config p/java"
+    && SEMGREP_ARGS+=(--config p/java)
   find "$TARGET" -name "*.ts" -o -name "*.tsx" -o -name "*.jsx" | grep -q . 2>/dev/null \
-    && SEMGREP_CONFIGS="$SEMGREP_CONFIGS --config p/javascript --config p/typescript --config p/react"
+    && SEMGREP_ARGS+=(--config p/javascript --config p/typescript --config p/react)
   find "$TARGET" -name "*.py" | grep -q . 2>/dev/null \
-    && SEMGREP_CONFIGS="$SEMGREP_CONFIGS --config p/python"
+    && SEMGREP_ARGS+=(--config p/python)
 
-  # shellcheck disable=SC2086
   semgrep scan \
-    $SEMGREP_CONFIGS \
+    "${SEMGREP_ARGS[@]}" \
     --json \
     --output "$OUTPUT/semgrep.json" \
     --metrics off \

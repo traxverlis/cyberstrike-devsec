@@ -2,27 +2,12 @@
 prompt_loader.py — Chargement dynamique des agents, skills et roles
 CyberStrikeAI DevSec — Option C Refactor
 """
+import sys
 from pathlib import Path
 from typing import Optional
 
-try:
-    import yaml as _yaml
-    def _load_yaml(text: str) -> dict:
-        return _yaml.safe_load(text) or {}
-except ImportError:
-    def _load_yaml(text: str) -> dict:  # type: ignore
-        result = {}
-        for line in text.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith('#'):
-                continue
-            if ':' in stripped:
-                key, _, val = stripped.partition(':')
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                if val:
-                    result[key] = val
-        return result
+sys.path.insert(0, str(Path(__file__).parent))
+from yaml_utils import load_yaml as _load_yaml
 
 
 class PromptLoader:

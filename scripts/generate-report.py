@@ -25,11 +25,28 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+
+# ─────────────────────────────────────────────────────────────────
+# DEPENDENCY CHECKS
+# ─────────────────────────────────────────────────────────────────
+
+def check_pdf_dependencies(output_format: str) -> None:
+    """Pre-check required external tools for the requested output format."""
+    if output_format == "md":
+        return
+    if not shutil.which("pandoc"):
+        print("[WARN] pandoc not found — HTML/PDF output may fail. "
+              "Install: apt-get install pandoc", file=sys.stderr)
+    if output_format == "pdf" and not shutil.which("weasyprint") and not shutil.which("xelatex"):
+        print("[WARN] Neither weasyprint nor xelatex found — PDF output may fail. "
+              "Install: pip install weasyprint", file=sys.stderr)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -885,13 +902,12 @@ def _convert_with_pandoc(md_path, output_path, fmt):
             _pandoc_pdf_latex(md_path, output_path)
 
 def _weasyprint_available():
-    try:
-        r = subprocess.run(["weasyprint","--version"], capture_output=True, text=True)
-        return r.returncode == 0
-    except FileNotFoundError:
-        return False
+    return shutil.which("weasyprint") is not None
 
 def _pandoc_html(md_path, output_path):
+    if not shutil.which("pandoc"):
+        print("[WARN] pandoc not found — skipping HTML conversion", file=sys.stderr)
+        return
     css = "body{font-family:Arial,sans-serif;max-width:960px;margin:2em auto;padding:0 2em;color:#1a1a2e;line-height:1.6}h1{color:#e94560;border-bottom:3px solid #e94560;padding-bottom:.3em}h2{color:#0f3460;border-bottom:1px solid #0f3460;margin-top:2em}table{border-collapse:collapse;width:100%;margin:1em 0}th{background:#0f3460;color:#fff;padding:.5em 1em;text-align:left}td{border:1px solid #ccc;padding:.5em 1em}tr:nth-child(even){background:#f5f7fa}code,pre{background:#f0f0f0;border-radius:4px;font-family:monospace;font-size:.9em}pre{padding:1em;overflow-x:auto}"
     css_path = md_path.parent / "_style.css"
     css_path.write_text(css)
@@ -905,22 +921,28 @@ def _pandoc_html(md_path, output_path):
         print("[WARN] pandoc not found")
 
 def _weasyprint_pdf(html_path, output_path):
+    if not shutil.which("weasyprint"):
+        print("[WARN] weasyprint not found — skipping PDF conversion", file=sys.stderr)
+        return
     print("[*] Generating PDF via weasyprint...")
     try:
         r = subprocess.run(["weasyprint", str(html_path), str(output_path)], capture_output=True, text=True)
         if r.returncode == 0: print(f"[+] PDF report written: {output_path}")
         else: print(f"[ERROR] weasyprint: {r.stderr}", file=sys.stderr)
     except FileNotFoundError:
-        print("[WARN] weasyprint not found")
+        print("[WARN] weasyprint not found", file=sys.stderr)
 
 def _pandoc_pdf_latex(md_path, output_path):
+    if not shutil.which("pandoc"):
+        print("[WARN] pandoc not found — skipping PDF conversion", file=sys.stderr)
+        return
     print("[*] PDF via pandoc+xelatex (fallback)...")
     try:
         r = subprocess.run(["pandoc", str(md_path), "-o", str(output_path), "--pdf-engine=xelatex","--variable","geometry:margin=2cm","--toc"], capture_output=True, text=True)
         if r.returncode == 0: print(f"[+] PDF written: {output_path}")
         else: print(f"[ERROR] xelatex: {r.stderr}", file=sys.stderr)
     except FileNotFoundError:
-        print("[WARN] pandoc not found")
+        print("[WARN] pandoc not found", file=sys.stderr)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -974,6 +996,8 @@ def main() -> None:
     if not args.results_dir.exists():
         print(f"[ERROR] Results directory not found: {args.results_dir}", file=sys.stderr)
         sys.exit(1)
+
+    check_pdf_dependencies(args.format)
 
     generate_report(
         level=args.level,

@@ -25,9 +25,13 @@ import urllib.error
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).parent))
+
+# ── Shared YAML loading ──────────────────────────────────────────────────────
+from yaml_utils import load_config_yaml
+
 # ── PromptLoader dynamique (Option C) ────────────────────────────────────────
 try:
-    sys.path.insert(0, str(Path(__file__).parent))
     from prompt_loader import PromptLoader
     _PROJECT_ROOT = Path(__file__).parent.parent
     _PROMPT_LOADER = PromptLoader(
@@ -44,57 +48,8 @@ except ImportError:
 # ── Chargement de la config ───────────────────────────────────────────────────
 
 def load_config(config_path: Optional[Path] = None) -> dict:
-    """Charge config.yaml. Fallback sur variables d'environnement."""
-    cfg = {
-        "base_url": "https://api.business.githubcopilot.com",
-        "api_key": "",
-        "model": "gpt-4o",
-        "temperature": 0.1,
-        "max_tokens": 4096,
-    }
-
-    if config_path is None:
-        candidates = [
-            Path(__file__).parent.parent / "config.yaml",
-            Path("config.yaml"),
-        ]
-        for c in candidates:
-            if c.exists():
-                config_path = c
-                break
-
-    if config_path and config_path.exists():
-        try:
-            content = config_path.read_text()
-            for line in content.splitlines():
-                line = line.strip()
-                if line.startswith("#") or ":" not in line:
-                    continue
-                key, _, val = line.partition(":")
-                key = key.strip().lower().lstrip("- ").strip()
-                val = val.strip().strip('"').strip("'")
-                if val.startswith("${") and val.endswith("}"):
-                    env_var = val[2:-1]
-                    val = os.getenv(env_var, "")
-                if key in cfg:
-                    cfg[key] = val
-        except Exception as e:
-            print(f"[AI] ⚠️  Config parse error: {e} — using defaults", file=sys.stderr)
-
-    # Override depuis variables d'environnement
-    env_map = {
-        "OPENAI_API_KEY":         "api_key",
-        "GITHUB_COPILOT_TOKEN":   "api_key",
-        "AI_API_KEY":             "api_key",
-        "AI_BASE_URL":            "base_url",
-        "AI_MODEL":               "model",
-    }
-    for env_var, cfg_key in env_map.items():
-        val = os.getenv(env_var)
-        if val:
-            cfg[cfg_key] = val
-
-    return cfg
+    """Charge config.yaml via yaml_utils. Fallback sur variables d'environnement."""
+    return load_config_yaml(config_path)
 
 
 # ── Appel au LLM ─────────────────────────────────────────────────────────────

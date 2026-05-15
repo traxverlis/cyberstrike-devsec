@@ -136,15 +136,10 @@ fi
 echo -e "${GREEN}  ✅ Consentement validé${RESET}\n"
 
 # ── Lancer le pipeline Level 2 ────────────────────────────────────────────────
-AI_FLAG=""
-[[ "$AI_MODE" == "true" ]] && AI_FLAG="--ai --ai-model $AI_MODEL_FROM_CONF"
+PIPELINE_ARGS=(--target "$TARGET_URL" --level 2 --consent "$CONSENT" --output "$OUTPUT")
+[[ "$AI_MODE" == "true" ]] && PIPELINE_ARGS+=(--ai --ai-model "$AI_MODEL_FROM_CONF")
 
-python3 scripts/devsec-pipeline.py \
-  --target "$TARGET_URL" \
-  --level 2 \
-  --consent "$CONSENT" \
-  --output "$OUTPUT" \
-  $AI_FLAG 2>&1
+python3 scripts/devsec-pipeline.py "${PIPELINE_ARGS[@]}" 2>&1
 
 echo ""
 echo -e "${GREEN}${BOLD}✅ Rapport disponible : $OUTPUT/report.pdf${RESET}"

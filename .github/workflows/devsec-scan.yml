@@ -400,6 +400,55 @@ jobs:
           path: ${{ env.REPORTS_DIR }}/checkov.json
           retention-days: 30
 
+  # ── Job 4b: Python Dependency Audit ──────────────────────────────────────
+  pip-audit:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit requirements.txt
+        run: |
+          mkdir -p "$REPORTS_DIR"
+          pip-audit -r requirements.txt --format json --output "$REPORTS_DIR/pip-audit.json" || true
+          pip-audit -r requirements.txt --desc || true
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-results
+          path: ${{ env.REPORTS_DIR }}/pip-audit.json
+          retention-days: 30
+
+  # ── Job 4c: Unit Tests ──────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
   # ── Job 5: Security Gate (blocks merge) ──────────────────────────────────
   security-gate:
     name: Security Gate

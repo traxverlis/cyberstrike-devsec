@@ -15,5 +15,8 @@ pypdf>=3.0.0              # PDF text extraction (verify-consent.py, fallback)
 # ── HTTP & Notifications ───────────────────────────────────────────────────
 requests>=2.31.0          # HTTP client (send-consent.py, notify.py)
 
+# ── YAML Parsing ───────────────────────────────────────────────────────────
+pyyaml>=6.0               # YAML parsing (yaml_utils.py — shared across scripts)
+
 # ── Terminal UI ────────────────────────────────────────────────────────────
 rich>=13.0.0              # Rich terminal output (all pipeline scripts)
