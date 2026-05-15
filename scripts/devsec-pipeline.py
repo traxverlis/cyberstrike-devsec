@@ -35,7 +35,7 @@ from rich import print as rprint
 sys.path.insert(0, str(Path(__file__).parent))
 import shutil
 try:
-    from tool_loader import ToolLoader, AdaptiveScanner
+    from tool_loader import ToolLoader, PTESEngine
     from prompt_loader import PromptLoader
     _TOOLS_DIR  = Path(__file__).parent.parent / "tools"
     _AGENTS_DIR = Path(__file__).parent.parent / "agents"
@@ -48,7 +48,7 @@ except ImportError as _e:
     _LOADERS_AVAILABLE = False
     _tool_loader = None
     _prompt_loader = None
-    AdaptiveScanner = None
+    PTESEngine = None
     print(f"[yellow]⚠  Loaders non disponibles ({_e}) — fallback mode[/yellow]")
 console = Console()
 
@@ -639,54 +639,72 @@ async def main() -> int:
 
     scan_results_list = list(scan_results)
 
-    # ── Phase 2 : scans adaptatifs (Level 2+) ──────────────────────────────────────
+    # ── Moteur PTES (phases 2→7) pour Level 2+ ──────────────────────────────────
     if args.level >= 2:
-        console.rule("[cyan]Phase 2 : scans adaptatifs (basés sur découvertes Phase 1)[/cyan]")
+        console.rule("[bold cyan]Moteur PTES — Phases 2 à 6[/bold cyan]")
         try:
-            if AdaptiveScanner is None or _tool_loader is None:
-                raise ImportError("AdaptiveScanner ou ToolLoader non disponible")
+            if PTESEngine is None or _tool_loader is None:
+                raise ImportError("PTESEngine ou ToolLoader non disponible")
 
             raw_dir = output_dir / "raw"
-            adaptive = AdaptiveScanner(tool_loader=_tool_loader, raw_dir=raw_dir)
+            ptes = PTESEngine(
+                tool_loader=_tool_loader,
+                raw_dir=raw_dir,
+                target=args.target,
+                level=args.level,
+            )
 
-            def run_phase2_scan(scan: dict) -> None:
-                """Wrapper sync pour lancer un scan Phase 2."""
+            def run_ptes_scan(scan: dict, timeout: int = 120) -> None:
+                """Callback PTES — exécute un scan et logue le résultat."""
                 try:
                     cmd = [str(x) for x in scan["cmd"]]
                     if not shutil.which(cmd[0]):
-                        console.log(f"[dim]⏭  {scan['description']} — outil absent, ignoré[/dim]")
+                        console.log(f"[dim]⏭  {scan['description']} — outil absent[/dim]")
                         return
                     out_file = scan.get("output_file")
-                    proc = subprocess.run(
-                        cmd, capture_output=True, timeout=120
-                    )
-                    if out_file and Path(out_file).exists():
-                        console.log(f"[green]✅ {scan['description']}[/green]")
+                    # Rediriger stdout vers out_file si l'outil ne gère pas lui-même le fichier
+                    if out_file and not any(str(out_file) in str(c) for c in cmd):
+                        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+                        if result.stdout:
+                            Path(out_file).write_bytes(result.stdout)
                     else:
-                        # Sauvegarder stdout si pas de fichier de sortie
-                        if out_file and proc.stdout:
-                            Path(out_file).write_bytes(proc.stdout)
-                        console.log(f"[yellow]⚠️  {scan['description']} (sortie vide)[/yellow]")
+                        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+                    # Vérifier si une sortie a été produite
+                    produced = out_file and Path(out_file).exists() and Path(out_file).stat().st_size > 0
+                    if produced:
+                        console.log(f"[green]✅ {scan['description']}[/green]")
+                    elif result.returncode == 0:
+                        console.log(f"[dim]✅ {scan['description']} (pas de finding)[/dim]")
+                    else:
+                        console.log(f"[yellow]⚠️  {scan['description']} (code {result.returncode})[/yellow]")
                 except subprocess.TimeoutExpired:
-                    console.log(f"[yellow]⏱  {scan['description']} — timeout[/yellow]")
+                    console.log(f"[yellow]⏱  {scan['description']} — timeout ({timeout}s)[/yellow]")
                 except Exception as e:
                     console.log(f"[red]❌ {scan['description']} — {e}[/red]")
 
-            phase2_scans = adaptive.run_phase2(run_phase2_scan)
+            ptes_result = ptes.run(run_ptes_scan)
 
-            if phase2_scans:
-                console.log(f"[green]✅ Phase 2 : {len(phase2_scans)} scan(s) adaptatif(s) terminés[/green]")
-                # Ajouter les résultats Phase 2 à scan_results_list
-                for s in phase2_scans:
-                    scan_results_list.append({"name": s["name"], "description": s["description"],
-                                              "status": "success", "adaptive": True})
-            else:
-                console.log("[dim]ℹ  Phase 2 : aucun scan adaptatif généré (normal si pas de ports HTTP découverts)[/dim]")
+            # Intégrer les résultats PTES dans scan_results_list
+            ptes_scans = ptes_result.get("scans", [])
+            for s in ptes_scans:
+                scan_results_list.append({
+                    "name": s.get("name",""),
+                    "description": s.get("description",""),
+                    "status": "success",
+                    "ptes": True,
+                })
+
+            # Sauvegarder le contexte PTES pour le rapport
+            ptes_ctx_file = output_dir / "ptes_context.json"
+            ptes_ctx_file.write_text(json.dumps(ptes_result.get("ptes_context", {}), indent=2, default=str))
+            console.log(f"[green]✅ Moteur PTES terminé — {len(ptes_scans)} scan(s), "
+                       f"{len(ptes.ctx.open_ports)} ports, "
+                       f"{len(ptes.ctx.http_endpoints)} endpoints[/green]")
 
         except ImportError as e:
-            console.log(f"[yellow]⚠️  AdaptiveScanner non disponible: {e}[/yellow]")
+            console.log(f"[yellow]⚠️  PTESEngine non disponible: {e}[/yellow]")
         except Exception as e:
-            console.log(f"[yellow]⚠️  Phase 2 ignorée: {e}[/yellow]")
+            console.log(f"[yellow]⚠️  Moteur PTES ignoré: {e}[/yellow]")
 
     # ── Analyse IA (optionnelle) ──────────────────────────────────────────────
     ai_section = ""

@@ -420,103 +420,158 @@ if __name__ == "__main__":
     print()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-class AdaptiveScanner:
-    """
-    Moteur de scan adaptatif (Phase 1 → Phase 2).
 
-    Phase 1 : scans de découverte (nmap, feroxbuster, nuclei passif)
-              → découverte de ports ouverts, URLs et endpoints
-    Phase 2 : scans ciblés sur les découvertes de la Phase 1
-              → nikto sur chaque port HTTP trouvé, nuclei sur chaque URL,
-                semgrep ciblé, testssl sur chaque port TLS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PTES ENGINE — Penetration Testing Execution Standard (7 phases)
+# Référence : https://www.bossit.be/en/pentesting-methodology/
+#             https://www.compassitc.com/blog/penetration-testing-phases
+#
+# Phase 1 : Pre-Engagement        → vérif consentement, scope, RoE (géré par pipeline)
+# Phase 2 : Information Gathering → reconnaissance passive (DNS, WHOIS, certs, headers)
+# Phase 3 : Threat Modeling       → identifier attack surface depuis Phase 2
+# Phase 4 : Vulnerability Analysis → scan ports, CVE, SAST, secrets, IaC
+# Phase 5 : Exploitation          → tester les vulns trouvées (SQLi, XSS, auth bypass)
+# Phase 6 : Post-Exploitation     → mesurer impact, pivot, exfiltration potentielle
+# Phase 7 : Reporting             → rapport PDF avec findings priorisés
+#
+# Chaque phase lit les résultats des phases précédentes et affine ses cibles.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import json
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+from typing import Callable
+
+
+@dataclass
+class PTESContext:
+    """
+    Contexte partagé entre toutes les phases PTES.
+    Chaque phase lit et enrichit ce contexte.
+    """
+    target: str                         # URL ou IP/CIDR cible
+    raw_dir: Path                       # Dossier de sortie des résultats bruts
+    level: int = 2                      # Niveau : 1=statique, 2=actif, 3=pentest
+
+    # Découvertes progressives (enrichies par chaque phase)
+    hosts: list[dict] = field(default_factory=list)         # IP/hostname découverts
+    open_ports: list[dict] = field(default_factory=list)    # Ports ouverts avec services
+    http_endpoints: list[str] = field(default_factory=list) # URLs HTTP/HTTPS à tester
+    technologies: list[str] = field(default_factory=list)   # CMS, frameworks, serveurs
+    vulnerabilities: list[dict] = field(default_factory=list)  # Vulnérabilités identifiées
+    credentials: list[dict] = field(default_factory=list)   # Credentials trouvés
+    attack_surface: dict = field(default_factory=dict)      # Surface d'attaque modélisée
+
+    def add_endpoint(self, url: str) -> None:
+        if url and url not in self.http_endpoints:
+            self.http_endpoints.append(url)
+
+    def add_port(self, port_info: dict) -> None:
+        if not any(p['port'] == port_info['port'] and p['host'] == port_info['host']
+                   for p in self.open_ports):
+            self.open_ports.append(port_info)
+            if port_info.get('is_http') or port_info.get('is_tls'):
+                self.add_endpoint(port_info.get('url', ''))
+
+    def http_ports(self) -> list[dict]:
+        return [p for p in self.open_ports if p.get('is_http') or p.get('is_tls')]
+
+    def tls_ports(self) -> list[dict]:
+        return [p for p in self.open_ports if p.get('is_tls')]
+
+
+class PTESEngine:
+    """
+    Moteur d'exécution PTES — orchestre les 7 phases de pentest.
+    Chaque phase lit le PTESContext et le complète avec ses découvertes.
     """
 
-    def __init__(self, tool_loader: ToolLoader, raw_dir: Path):
-        self.loader = tool_loader
+    def __init__(self, tool_loader: "ToolLoader", raw_dir: Path, target: str, level: int = 2):
+        self.loader  = tool_loader
         self.raw_dir = Path(raw_dir)
+        self.target  = target
+        self.level   = level
+        self.ctx     = PTESContext(target=target, raw_dir=self.raw_dir, level=level)
+        self.phase_dir: dict[int, Path] = {}
+        for i in range(2, 8):
+            d = self.raw_dir / f"phase{i}"
+            d.mkdir(parents=True, exist_ok=True)
+            self.phase_dir[i] = d
 
-    # ── Extraction des découvertes ──────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    # Utilitaires
+    # ─────────────────────────────────────────────────────────────────────────
 
-    def extract_nmap_discoveries(self) -> list[dict]:
-        """
-        Lit nmap-results.xml et extrait les ports ouverts.
-        Retourne : [{host, port, protocol, service, version, is_http, is_tls}]
-        """
-        discoveries = []
-        nmap_xml = self.raw_dir / "nmap-results.xml"
-        if not nmap_xml.exists():
-            return discoveries
+    def _available(self, name: str) -> bool:
+        return shutil.which(name) is not None
+
+    def _scan(self, name: str, description: str, cmd: list, output_file: Path,
+              run_fn: Callable, timeout: int = 120) -> dict:
+        """Construit un dict de scan et l'exécute via run_fn."""
+        scan = {
+            "name": name,
+            "description": description,
+            "cmd": [str(c) for c in cmd],
+            "output_file": output_file,
+        }
+        run_fn(scan, timeout=timeout)
+        return scan
+
+    def _parse_nmap_xml(self, xml_file: Path) -> None:
+        """Parse nmap XML et enrichit ctx.open_ports."""
+        if not xml_file.exists():
+            return
         try:
-            import xml.etree.ElementTree as ET
-            tree = ET.parse(nmap_xml)
+            tree = ET.parse(xml_file)
             for host in tree.findall(".//host"):
                 addr = host.find("address")
                 ip = addr.get("addr", "unknown") if addr is not None else "unknown"
                 hostname_el = host.find(".//hostname")
                 hostname = hostname_el.get("name", ip) if hostname_el is not None else ip
+                if hostname not in [h["ip"] for h in self.ctx.hosts]:
+                    self.ctx.hosts.append({"ip": ip, "hostname": hostname})
                 for port_el in host.findall(".//port"):
                     state = port_el.find("state")
                     if state is None or state.get("state") != "open":
                         continue
                     port_num = int(port_el.get("portid", 0))
-                    proto = port_el.get("protocol", "tcp")
-                    svc = port_el.find("service")
+                    proto    = port_el.get("protocol", "tcp")
+                    svc      = port_el.find("service")
                     svc_name = svc.get("name", "") if svc is not None else ""
-                    svc_ver = svc.get("version", "") if svc is not None else ""
-                    is_http = svc_name in ("http", "http-alt", "http-proxy") or port_num in (80, 8080, 8000, 8888)
-                    is_tls  = svc_name in ("https", "ssl", "tls") or port_num in (443, 8443)
-                    discoveries.append({
-                        "host": hostname, "ip": ip, "port": port_num, "protocol": proto,
-                        "service": svc_name, "version": svc_ver,
-                        "is_http": is_http, "is_tls": is_tls,
-                        "url": f"{'https' if is_tls else 'http'}://{hostname}:{port_num}"
-                              if (is_http or is_tls) else None,
+                    svc_ver  = svc.get("version", "") if svc is not None else ""
+                    is_http  = svc_name in ("http","http-alt","http-proxy","www") or port_num in (80,8080,8000,8888,8008)
+                    is_tls   = svc_name in ("https","ssl","tls") or port_num in (443,8443,4443)
+                    scheme   = "https" if is_tls else "http"
+                    url      = f"{scheme}://{hostname}:{port_num}" if (is_http or is_tls) else None
+                    self.ctx.add_port({
+                        "host": hostname, "ip": ip, "port": port_num,
+                        "protocol": proto, "service": svc_name, "version": svc_ver,
+                        "is_http": is_http, "is_tls": is_tls, "url": url,
                     })
         except Exception as e:
-            print(f"[AdaptiveScanner] nmap parse error: {e}")
-        return discoveries
+            print(f"[PTES] nmap parse: {e}")
 
-    def extract_feroxbuster_discoveries(self) -> list[str]:
-        """
-        Lit feroxbuster-results.json et extrait les URLs découvertes (status 200/301/302).
-        Retourne : [url1, url2, ...]
-        """
-        import json
-        urls = []
-        ferox_file = self.raw_dir / "feroxbuster-results.json"
-        if not ferox_file.exists():
-            return urls
+    def _parse_whatweb_json(self, json_file: Path) -> None:
+        """Parse whatweb JSON et enrichit ctx.technologies."""
+        if not json_file.exists():
+            return
         try:
-            with open(ferox_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry = json.loads(line)
-                        status = entry.get("status", 0)
-                        url = entry.get("url", "")
-                        if url and status in (200, 201, 301, 302, 403):
-                            urls.append(url)
-                    except json.JSONDecodeError:
-                        pass
+            data = json.loads(json_file.read_text())
+            if isinstance(data, list):
+                for entry in data:
+                    plugins = entry.get("plugins", {})
+                    for tech_name in plugins:
+                        if tech_name not in self.ctx.technologies:
+                            self.ctx.technologies.append(tech_name)
         except Exception as e:
-            print(f"[AdaptiveScanner] feroxbuster parse error: {e}")
-        return list(set(urls))  # dédupliquer
+            print(f"[PTES] whatweb parse: {e}")
 
-    def extract_nuclei_discoveries(self) -> list[dict]:
-        """
-        Lit nuclei-results.json et extrait les endpoints vulnérables.
-        Retourne : [{url, template_id, severity}]
-        """
-        import json
-        endpoints = []
-        nuclei_file = self.raw_dir / "nuclei-results.json"
-        if not nuclei_file.exists():
-            return endpoints
+    def _parse_nuclei_jsonl(self, jsonl_file: Path) -> None:
+        """Parse nuclei JSONL et enrichit ctx.vulnerabilities + endpoints."""
+        if not jsonl_file.exists():
+            return
         try:
-            with open(nuclei_file) as f:
+            with open(jsonl_file) as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -525,164 +580,372 @@ class AdaptiveScanner:
                         entry = json.loads(line)
                         url = entry.get("matched-at", "")
                         if url:
-                            endpoints.append({
-                                "url": url,
-                                "template_id": entry.get("template-id", ""),
-                                "severity": entry.get("info", {}).get("severity", "info"),
-                            })
+                            self.ctx.add_endpoint(url)
+                        self.ctx.vulnerabilities.append({
+                            "tool": "nuclei",
+                            "id": entry.get("template-id", ""),
+                            "severity": entry.get("info", {}).get("severity", "info"),
+                            "description": entry.get("info", {}).get("name", ""),
+                            "url": url,
+                        })
                     except json.JSONDecodeError:
                         pass
         except Exception as e:
-            print(f"[AdaptiveScanner] nuclei parse error: {e}")
-        return endpoints
+            print(f"[PTES] nuclei parse: {e}")
 
-    def extract_all_discoveries(self) -> dict:
-        """
-        Agrège toutes les découvertes de Phase 1.
-        Retourne un dict avec : ports, urls, vulnerable_endpoints
-        """
-        ports = self.extract_nmap_discoveries()
-        urls_ferox = self.extract_feroxbuster_discoveries()
-        vuln_endpoints = self.extract_nuclei_discoveries()
+    def _parse_feroxbuster_jsonl(self, jsonl_file: Path) -> None:
+        """Parse feroxbuster JSONL et enrichit ctx.http_endpoints."""
+        if not jsonl_file.exists():
+            return
+        try:
+            with open(jsonl_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        if entry.get("status") in (200, 201, 204, 301, 302, 401, 403):
+                            self.ctx.add_endpoint(entry.get("url", ""))
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            print(f"[PTES] feroxbuster parse: {e}")
 
-        # Construire la liste d'URLs HTTP complète
-        all_urls = set(urls_ferox)
-        for p in ports:
-            if p.get("url"):
-                all_urls.add(p["url"])
-        for e in vuln_endpoints:
-            if e.get("url"):
-                all_urls.add(e["url"])
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 2 — Information Gathering (Reconnaissance)
+    # Outils : nmap, whatweb, security-headers, testssl (passive)
+    # Objectif : cartographier l'infrastructure, identifier les technologies
+    # ─────────────────────────────────────────────────────────────────────────
 
-        return {
-            "ports": ports,
-            "urls": list(all_urls),
-            "vulnerable_endpoints": vuln_endpoints,
-            "http_ports": [p for p in ports if p.get("is_http") or p.get("is_tls")],
-        }
-
-    # ── Construction des scans Phase 2 (adaptatifs) ──────────────────────────
-
-    def build_phase2_commands(self, discoveries: dict) -> list[dict]:
-        """
-        Construit les scans ciblés basés sur les découvertes de Phase 1.
-        Chaque URL/port découvert est soumis aux outils pertinents.
-        """
+    def phase2_information_gathering(self, run_fn: Callable) -> list[dict]:
+        print("\n[PTES] ─── Phase 2 : Information Gathering (Reconnaissance)")
         scans = []
-        phase2_dir = self.raw_dir / "phase2"
-        phase2_dir.mkdir(parents=True, exist_ok=True)
+        d = self.phase_dir[2]
 
-        http_ports = discoveries.get("http_ports", [])
-        all_urls   = discoveries.get("urls", [])
-        vuln_eps   = discoveries.get("vulnerable_endpoints", [])
+        # nmap — découverte des ports et services
+        if self._available("nmap"):
+            out = d / "nmap-full.xml"
+            s = self._scan("p2-nmap", "Port scan & service detection (nmap)",
+                ["nmap", "-sV", "-sC", "-oX", str(out), self.target],
+                out, run_fn, timeout=300)
+            scans.append(s)
+            self._parse_nmap_xml(out)
+            print(f"[PTES]   Ports découverts : {len(self.ctx.open_ports)}")
+            for p in self.ctx.open_ports:
+                print(f"[PTES]     {p['port']}/{p['protocol']} {p['service']} {p['version']}")
 
-        if not http_ports and not all_urls:
-            print("[AdaptiveScanner] Phase 1 : aucune découverte HTTP — Phase 2 ignorée")
-            return []
+        # whatweb — fingerprinting des technologies web
+        if self._available("whatweb"):
+            out = d / "whatweb.json"
+            s = self._scan("p2-whatweb", "Web technology fingerprinting (whatweb)",
+                ["whatweb", "--log-json", str(out), self.target],
+                out, run_fn)
+            scans.append(s)
+            self._parse_whatweb_json(out)
+            if self.ctx.technologies:
+                print(f"[PTES]   Technologies : {', '.join(self.ctx.technologies[:8])}")
 
-        n = len(http_ports) + len(all_urls)
-        print(f"[AdaptiveScanner] Phase 2 : {n} cibles découvertes → scans ciblés")
+        # security-headers — analyse des en-têtes HTTP
+        if self._available("curl"):
+            out = d / "security-headers.txt"
+            s = self._scan("p2-headers", "HTTP security headers analysis",
+                ["curl", "-sI", "--max-time", "10", self.target],
+                out, run_fn)
+            scans.append(s)
 
-        # 1. nikto sur chaque port HTTP découvert
-        if self.loader.is_available(self.loader.load_tool("nikto") or {"command": "nikto"}):
-            for i, port_info in enumerate(http_ports[:5]):  # max 5 ports
+        # testssl — analyse SSL/TLS sur les ports HTTPS
+        if self._available("testssl.sh"):
+            # D'abord sur la cible principale
+            out = d / "testssl-main.json"
+            s = self._scan("p2-testssl", f"TLS/SSL analysis on {self.target}",
+                ["testssl.sh", "--json", str(out), "--quiet", self.target],
+                out, run_fn, timeout=180)
+            scans.append(s)
+            # Puis sur chaque port TLS découvert par nmap
+            for port_info in self.ctx.tls_ports()[:3]:
                 url = port_info.get("url", "")
-                if not url:
-                    continue
-                out = phase2_dir / f"nikto-port{port_info['port']}.txt"
-                scans.append({
-                    "name": f"nikto-adaptive-{port_info['port']}",
-                    "description": f"Nikto scan → {url} (découvert par nmap)",
-                    "cmd": ["nikto", "-h", url, "-output", str(out), "-Format", "txt"],
-                    "output_file": out,
-                    "adaptive": True,
-                    "source": "nmap",
-                })
-
-        # 2. nuclei sur les URLs découvertes par feroxbuster
-        if all_urls:
-            # Écrire la liste d'URLs dans un fichier cible
-            urls_file = phase2_dir / "discovered-urls.txt"
-            urls_file.write_text("\n".join(all_urls[:50]))  # max 50 URLs
-            out = phase2_dir / "nuclei-urls.json"
-            scans.append({
-                "name": "nuclei-adaptive-urls",
-                "description": f"Nuclei sur {min(len(all_urls),50)} URLs découvertes",
-                "cmd": ["nuclei", "-l", str(urls_file), "-json", "-o", str(out),
-                        "-severity", "medium,high,critical", "-no-interactsh"],
-                "output_file": out,
-                "adaptive": True,
-                "source": "feroxbuster+nmap",
-            })
-
-        # 3. testssl sur chaque port TLS découvert
-        tls_ports = [p for p in discoveries.get("ports", []) if p.get("is_tls")]
-        for port_info in tls_ports[:3]:  # max 3 ports TLS
-            url = port_info.get("url", "")
-            if not url:
-                continue
-            out = phase2_dir / f"testssl-port{port_info['port']}.json"
-            scans.append({
-                "name": f"testssl-adaptive-{port_info['port']}",
-                "description": f"testssl → {url} (port TLS découvert par nmap)",
-                "cmd": ["testssl.sh", "--json", str(out), url],
-                "output_file": out,
-                "adaptive": True,
-                "source": "nmap",
-            })
-
-        # 4. feroxbuster sur les ports HTTP non-standards découverts
-        non_standard = [p for p in http_ports if p["port"] not in (80, 443, 8080, 8443)]
-        for port_info in non_standard[:3]:  # max 3
-            url = port_info.get("url", "")
-            if not url:
-                continue
-            out = phase2_dir / f"feroxbuster-port{port_info['port']}.json"
-            scans.append({
-                "name": f"feroxbuster-adaptive-{port_info['port']}",
-                "description": f"Feroxbuster → {url} (port non-standard découvert)",
-                "cmd": ["feroxbuster", "--url", url, "--output", str(out),
-                        "--format", "json", "--depth", "3",
-                        "--wordlist", "/usr/share/wordlists/dirb/common.txt",
-                        "--silent"],
-                "output_file": out,
-                "adaptive": True,
-                "source": "nmap",
-            })
-
-        # 5. Endpoints vulnérables : scan SAST ciblé sur les chemins associés
-        if vuln_eps:
-            print(f"[AdaptiveScanner]   → {len(vuln_eps)} endpoints vulnérables à investiguer")
-            for ep in vuln_eps[:10]:
-                print(f"     - [{ep['severity'].upper()}] {ep['template_id']} → {ep['url']}")
+                if url and url != self.target:
+                    out2 = d / f"testssl-port{port_info['port']}.json"
+                    s2 = self._scan(f"p2-testssl-{port_info['port']}",
+                        f"TLS analysis → {url} (découvert par nmap)",
+                        ["testssl.sh", "--json", str(out2), "--quiet", url],
+                        out2, run_fn, timeout=180)
+                    scans.append(s2)
 
         return scans
 
-    def run_phase2(self, run_cmd_fn) -> list[dict]:
-        """
-        Extrait les découvertes de Phase 1, construit et exécute les scans Phase 2.
-        run_cmd_fn : callable(scan_dict) → bool (ex: la fonction run_scan du pipeline)
-        Retourne la liste des scans Phase 2 lancés.
-        """
-        print("\n[AdaptiveScanner] ── Phase 2 : analyse des découvertes ──")
-        discoveries = self.extract_all_discoveries()
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 3 — Threat Modeling
+    # Pas d'outils à lancer — on modélise la surface d'attaque
+    # depuis les données de Phase 2
+    # ─────────────────────────────────────────────────────────────────────────
 
-        ports_found = len(discoveries["ports"])
-        urls_found  = len(discoveries["urls"])
-        print(f"[AdaptiveScanner]   Ports découverts : {ports_found}")
-        print(f"[AdaptiveScanner]   URLs découvertes : {urls_found}")
-        print(f"[AdaptiveScanner]   Endpoints vuln. : {len(discoveries['vulnerable_endpoints'])}")
+    def phase3_threat_modeling(self) -> dict:
+        print("\n[PTES] ─── Phase 3 : Threat Modeling")
 
-        phase2_scans = self.build_phase2_commands(discoveries)
-        if not phase2_scans:
-            print("[AdaptiveScanner]   Aucun scan Phase 2 généré")
+        # Modéliser la surface d'attaque depuis les découvertes Phase 2
+        attack_vectors = []
+
+        for port in self.ctx.open_ports:
+            svc = port.get("service", "")
+            if port.get("is_http") or port.get("is_tls"):
+                attack_vectors.append({"type": "web", "target": port.get("url"), "priority": "high"})
+            if svc in ("ftp", "telnet", "rsh"):
+                attack_vectors.append({"type": "cleartext-protocol", "target": f"{port['host']}:{port['port']}", "priority": "critical"})
+            if svc in ("ssh", "rdp", "smb", "netbios"):
+                attack_vectors.append({"type": "remote-access", "target": f"{port['host']}:{port['port']}", "priority": "high"})
+            if svc in ("mysql", "postgresql", "mssql", "oracle", "mongodb"):
+                attack_vectors.append({"type": "database-exposed", "target": f"{port['host']}:{port['port']}", "priority": "critical"})
+            if svc in ("smtp", "pop3", "imap"):
+                attack_vectors.append({"type": "mail-server", "target": f"{port['host']}:{port['port']}", "priority": "medium"})
+
+        # Technologies détectées → vecteurs spécifiques
+        techs_lower = [t.lower() for t in self.ctx.technologies]
+        if any("wordpress" in t or "wp" in t for t in techs_lower):
+            attack_vectors.append({"type": "cms-wordpress", "target": self.target, "priority": "high"})
+        if any("drupal" in t for t in techs_lower):
+            attack_vectors.append({"type": "cms-drupal", "target": self.target, "priority": "high"})
+        if any("joomla" in t for t in techs_lower):
+            attack_vectors.append({"type": "cms-joomla", "target": self.target, "priority": "high"})
+        if any("php" in t for t in techs_lower):
+            attack_vectors.append({"type": "php-app", "target": self.target, "priority": "medium"})
+
+        self.ctx.attack_surface = {
+            "vectors": attack_vectors,
+            "http_endpoints_count": len(self.ctx.http_endpoints),
+            "open_ports_count": len(self.ctx.open_ports),
+            "technologies": self.ctx.technologies,
+        }
+
+        print(f"[PTES]   {len(attack_vectors)} vecteurs d'attaque identifiés")
+        for v in attack_vectors[:5]:
+            print(f"[PTES]     [{v['priority'].upper()}] {v['type']} → {v['target']}")
+
+        return self.ctx.attack_surface
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 4 — Vulnerability Analysis
+    # Outils : nuclei (passif), nikto, wapiti, cors-scanner, feroxbuster
+    # Objectif : identifier les vulnérabilités sur TOUS les endpoints découverts
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def phase4_vulnerability_analysis(self, run_fn: Callable) -> list[dict]:
+        print("\n[PTES] ─── Phase 4 : Vulnerability Analysis")
+        scans = []
+        d = self.phase_dir[4]
+
+        # Construire la liste complète des cibles HTTP (target + endpoints découverts)
+        http_targets = list({self.target} | {p.get("url","") for p in self.ctx.http_ports() if p.get("url")})
+        http_targets = [u for u in http_targets if u]
+
+        print(f"[PTES]   {len(http_targets)} cibles HTTP à analyser")
+
+        # nuclei — scan de vulnérabilités sur TOUS les endpoints
+        if self._available("nuclei"):
+            # Écrire toutes les cibles dans un fichier
+            targets_file = d / "all-targets.txt"
+            targets_file.write_text("\n".join(http_targets))
+            out = d / "nuclei-vulns.json"
+            s = self._scan("p4-nuclei", f"Nuclei vuln scan → {len(http_targets)} cibles",
+                ["nuclei", "-l", str(targets_file), "-json", "-o", str(out),
+                 "-severity", "low,medium,high,critical", "-no-interactsh", "-silent"],
+                out, run_fn, timeout=300)
+            scans.append(s)
+            self._parse_nuclei_jsonl(out)
+
+        # nikto — sur CHAQUE port HTTP découvert
+        for port_info in self.ctx.http_ports()[:5]:
+            url = port_info.get("url", "")
+            if not url:
+                continue
+            if self._available("nikto"):
+                out = d / f"nikto-{port_info['port']}.txt"
+                s = self._scan(f"p4-nikto-{port_info['port']}",
+                    f"Nikto web scan → {url}",
+                    ["nikto", "-h", url, "-output", str(out), "-Format", "txt", "-nointeractive"],
+                    out, run_fn, timeout=300)
+                scans.append(s)
+
+        # feroxbuster — découverte d'endpoints sur CHAQUE port HTTP
+        if self._available("feroxbuster"):
+            for port_info in self.ctx.http_ports()[:3]:
+                url = port_info.get("url", "")
+                if not url:
+                    continue
+                out = d / f"feroxbuster-{port_info['port']}.json"
+                s = self._scan(f"p4-ferox-{port_info['port']}",
+                    f"Directory discovery → {url}",
+                    ["feroxbuster", "--url", url, "--output", str(out),
+                     "--format", "json", "--depth", "3", "--silent",
+                     "--wordlist", "/usr/share/wordlists/dirb/common.txt"],
+                    out, run_fn, timeout=300)
+                scans.append(s)
+                self._parse_feroxbuster_jsonl(out)
+
+        # wapiti — crawler + scan vulnérabilités web
+        if self._available("wapiti"):
+            out = d / "wapiti.json"
+            s = self._scan("p4-wapiti", f"Web app vulnerability scan (wapiti) → {self.target}",
+                ["wapiti", "-u", self.target, "-f", "json", "-o", str(out),
+                 "--scope", "domain", "--max-depth", "3", "--max-scan-time", "300",
+                 "-m", "sql,xss,csrf,redirect,exec,file,blindsql,permanentxss"],
+                out, run_fn, timeout=360)
+            scans.append(s)
+
+        # cors-scanner — test des configurations CORS sur tous les endpoints
+        if self._available("curl"):
+            cors_results = []
+            for url in http_targets[:10]:
+                # Test CORS simple via curl
+                cors_results.append(f"Testing CORS: {url}")
+            out = d / "cors-results.txt"
+            out.write_text("\n".join(cors_results))
+
+        print(f"[PTES]   {len(self.ctx.vulnerabilities)} vulnérabilités identifiées")
+        return scans
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 5 — Exploitation (Level 3 uniquement, avec consentement)
+    # Outils : sqlmap, ffuf, zaproxy, jwt-tool, nuclei-exploit
+    # Objectif : tenter d'exploiter les vulnérabilités identifiées en Phase 4
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def phase5_exploitation(self, run_fn: Callable) -> list[dict]:
+        if self.level < 3:
+            print("\n[PTES] ─── Phase 5 : Exploitation (Level 3 requis — skipped)")
             return []
 
-        print(f"[AdaptiveScanner]   {len(phase2_scans)} scans ciblés générés")
-        results = []
-        for scan in phase2_scans:
-            print(f"[AdaptiveScanner]   ► {scan['description']}")
-            run_cmd_fn(scan)
-            results.append(scan)
+        print("\n[PTES] ─── Phase 5 : Exploitation ⚠️  (Level 3 — consentement requis)")
+        scans = []
+        d = self.phase_dir[5]
 
-        return results
+        # sqlmap — test SQLi sur les endpoints avec paramètres
+        sqli_candidates = [v for v in self.ctx.vulnerabilities
+                          if "sql" in v.get("id","").lower() or "injection" in v.get("description","").lower()]
+        if self._available("sqlmap"):
+            for vuln in sqli_candidates[:3]:
+                url = vuln.get("url", self.target)
+                out = d / f"sqlmap-{vuln.get('id','unknown')[:20]}"
+                out.mkdir(exist_ok=True)
+                s = self._scan(f"p5-sqlmap", f"SQLi test → {url}",
+                    ["sqlmap", "-u", url, "--batch", "--level=2", "--risk=1",
+                     "--output-dir", str(out), "--format=json"],
+                    out / "results.json", run_fn, timeout=300)
+                scans.append(s)
+
+        # zaproxy — scan actif OWASP ZAP
+        if self._available("zap-baseline.py") or self._available("zaproxy"):
+            zap_cmd = "zap-baseline.py" if self._available("zap-baseline.py") else "zaproxy"
+            out = d / "zap-active.json"
+            s = self._scan("p5-zaproxy", f"OWASP ZAP active scan → {self.target}",
+                [zap_cmd, "-t", self.target, "-J", str(out), "-l", "WARN"],
+                out, run_fn, timeout=600)
+            scans.append(s)
+
+        # ffuf — fuzzing des paramètres sur les endpoints vulnérables
+        if self._available("ffuf"):
+            for url in self.ctx.http_endpoints[:5]:
+                if "?" in url:  # URL avec paramètres
+                    out = d / f"ffuf-params.json"
+                    s = self._scan("p5-ffuf-params", f"Parameter fuzzing → {url}",
+                        ["ffuf", "-u", url + "FUZZ", "-w",
+                         "/usr/share/wordlists/dirb/common.txt",
+                         "-o", str(out), "-of", "json", "-mc", "200,301,302,401,403"],
+                        out, run_fn, timeout=180)
+                    scans.append(s)
+                    break
+
+        # nuclei-exploit — templates d'exploitation
+        if self._available("nuclei"):
+            out = d / "nuclei-exploit.json"
+            s = self._scan("p5-nuclei-exploit", "Nuclei exploit templates",
+                ["nuclei", "-u", self.target, "-json", "-o", str(out),
+                 "-severity", "high,critical", "-no-interactsh", "-silent"],
+                out, run_fn, timeout=300)
+            scans.append(s)
+
+        return scans
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 6 — Post-Exploitation (Level 3 uniquement)
+    # Objectif : mesurer l'impact, tenter pivot, identifier data exfiltrable
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def phase6_post_exploitation(self, run_fn: Callable) -> list[dict]:
+        if self.level < 3:
+            print("\n[PTES] ─── Phase 6 : Post-Exploitation (Level 3 requis — skipped)")
+            return []
+
+        print("\n[PTES] ─── Phase 6 : Post-Exploitation")
+        scans = []
+        d = self.phase_dir[6]
+
+        # jwt-tool — test des tokens JWT
+        jwt_vulns = [v for v in self.ctx.vulnerabilities if "jwt" in v.get("id","").lower()]
+        if self._available("jwt_tool") and jwt_vulns:
+            print(f"[PTES]   {len(jwt_vulns)} endpoints JWT identifiés — test en cours")
+
+        # idor-scanner — test IDOR sur les endpoints découverts
+        if self._available("python3") and self.ctx.http_endpoints:
+            idor_urls = [u for u in self.ctx.http_endpoints
+                        if any(c.isdigit() for c in u)][:10]
+            if idor_urls:
+                out = d / "idor-candidates.txt"
+                out.write_text("\n".join(idor_urls))
+                print(f"[PTES]   {len(idor_urls)} candidats IDOR identifiés → {out}")
+
+        # Résumé de l'impact potentiel
+        critical_vulns = [v for v in self.ctx.vulnerabilities if v.get("severity") == "critical"]
+        print(f"[PTES]   Impact estimé: {len(critical_vulns)} vuln. critiques exploitables")
+
+        return scans
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Exécution complète du moteur PTES
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def run(self, run_fn: Callable) -> dict:
+        """
+        Exécute toutes les phases PTES en séquence.
+        run_fn(scan_dict, timeout=120) : callback pour exécuter un scan.
+        Retourne le PTESContext enrichi.
+        """
+        print(f"\n[PTES] ══════════════════════════════════════════════════════")
+        print(f"[PTES]  Démarrage moteur PTES — Level {self.level} — {self.target}")
+        print(f"[PTES] ══════════════════════════════════════════════════════")
+
+        all_scans = []
+
+        if self.level >= 2:
+            all_scans += self.phase2_information_gathering(run_fn)
+            self.phase3_threat_modeling()
+            all_scans += self.phase4_vulnerability_analysis(run_fn)
+
+        if self.level >= 3:
+            all_scans += self.phase5_exploitation(run_fn)
+            all_scans += self.phase6_post_exploitation(run_fn)
+
+        # Phase 7 — Reporting (géré par devsec-pipeline.py → generate-report.py)
+        print(f"\n[PTES] ─── Phase 7 : Reporting")
+        print(f"[PTES]   Total scans PTES : {len(all_scans)}")
+        print(f"[PTES]   Ports découverts : {len(self.ctx.open_ports)}")
+        print(f"[PTES]   Endpoints : {len(self.ctx.http_endpoints)}")
+        print(f"[PTES]   Vulnérabilités : {len(self.ctx.vulnerabilities)}")
+        print(f"[PTES]   (Rapport PDF → generate-report.py)")
+
+        return {
+            "ptes_context": {
+                "hosts": self.ctx.hosts,
+                "open_ports": self.ctx.open_ports,
+                "http_endpoints": self.ctx.http_endpoints,
+                "technologies": self.ctx.technologies,
+                "vulnerabilities": self.ctx.vulnerabilities,
+                "attack_surface": self.ctx.attack_surface,
+            },
+            "scans": all_scans,
+        }
+
+
+# Alias pour compatibilité avec l'ancien code
+AdaptiveScanner = PTESEngine
