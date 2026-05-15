@@ -201,4 +201,31 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 
 ---
 
+---
+
+## Alternative : Mode Docker (recommandé sur Windows)
+
+Si tu es sur Windows ou que tu ne veux pas installer les outils localement :
+
+```bash
+# 1. Installer Docker Desktop
+# https://docs.docker.com/get-docker/
+
+# 2. Cloner le projet
+git clone https://github.com/traxverlis/cyberstrike-devsec.git
+cd cyberstrike-devsec
+
+# 3. Construire l'image (une seule fois)
+docker build -t cyberstrike-devsec .
+
+# 4. Scanner
+docker run --rm -v $(pwd):/workspace cyberstrike-devsec scan
+
+# Windows PowerShell :
+docker run --rm -v ${PWD}:/workspace cyberstrike-devsec scan
+```
+
+**L'image contient les 25+ outils préinstallés** — aucune installation locale requise.
+Voir `README.md` pour toutes les options Docker.
+
 *Installation complète estimée : 3 à 8 minutes sur une connexion standard.*

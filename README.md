@@ -231,6 +231,104 @@ done
 
 ---
 
+## Mode Docker (Windows / Linux / macOS — sans installation)
+
+Si tu ne veux pas installer les outils localement, utilise le conteneur Docker.
+**Fonctionne sur Windows, macOS et Linux.**
+
+### Prérequis
+
+- [Docker Desktop](https://docs.docker.com/get-docker/) installé
+
+### Première utilisation
+
+```bash
+# Cloner le projet
+git clone https://github.com/traxverlis/cyberstrike-devsec.git
+cd cyberstrike-devsec
+
+# Construire l'image (une seule fois, ~10-15 minutes)
+docker build -t cyberstrike-devsec .
+
+# Vérifier que tout est OK
+docker run --rm cyberstrike-devsec verify
+```
+
+### Utilisation
+
+```bash
+# Scan rapide du répertoire courant
+docker run --rm -v $(pwd):/workspace cyberstrike-devsec scan --mode quick
+
+# Scan complet avec rapport PDF
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v $(pwd)/reports:/reports \
+  cyberstrike-devsec scan --mode full --output /reports
+
+# Scan avec analyse IA
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v $(pwd)/reports:/reports \
+  -e GITHUB_COPILOT_TOKEN="ton-token" \
+  cyberstrike-devsec scan --mode full --ai
+
+# Scan site web Level 2
+docker run --rm \
+  -v $(pwd)/reports:/reports \
+  --network=host \
+  cyberstrike-devsec scan-web \
+    --target https://app.example.com \
+    --consent /reports/consent-signed.pdf
+
+# Shell interactif (accès à tous les outils)
+docker run --rm -it -v $(pwd):/workspace cyberstrike-devsec shell
+```
+
+### Avec docker compose
+
+```bash
+# Copier et configurer
+cp .env.example .env
+
+# Scan (modifie la commande dans .env ou passe directement)
+docker compose run devsec scan --mode full
+
+# Vérifier les outils
+docker compose run devsec verify
+```
+
+### Commande --docker (auto-détection)
+
+Tu peux aussi utiliser les scripts normaux avec `--docker` — ils lancent
+automatiquement le conteneur si Docker est disponible :
+
+```bash
+# Lance scan.sh dans Docker automatiquement
+./scripts/scan.sh --docker --mode full
+
+# Lance scan-web.sh dans Docker
+./scripts/scan-web.sh --docker --target https://app.example.com
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Construire l'image
+docker build -t cyberstrike-devsec .
+
+# Scan du répertoire courant
+docker run --rm -v ${PWD}:/workspace cyberstrike-devsec scan --mode quick
+
+# Avec rapport
+docker run --rm `
+  -v ${PWD}:/workspace `
+  -v ${PWD}/reports:/reports `
+  cyberstrike-devsec scan --mode full --output /reports
+```
+
+---
+
 ## Langages supportés
 
 | Langage | CVE | SAST | Secrets | Supply Chain |

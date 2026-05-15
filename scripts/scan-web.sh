@@ -24,6 +24,7 @@ CONSENT=""
 OUTPUT=""
 AI_MODE=false
 AI_MODEL_FROM_CONF="gpt-4o"
+DOCKER_MODE=false
 
 # ── Charger devsec.conf ───────────────────────────────────────────────────────
 CONF="$(dirname "$0")/../devsec.conf"
@@ -52,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --target)  TARGET_URL="$2"; shift 2 ;;
     --consent) CONSENT="$2"; shift 2 ;;
     --output)  OUTPUT="$2"; shift 2 ;;
+    --docker)  DOCKER_MODE=true; shift ;;
     --ai)      AI_MODE=true; shift ;;
     --help|-h)
       echo "Usage: ./scripts/scan-web.sh [--target URL] [--consent PDF] [--output DIR] [--ai]"
@@ -71,6 +73,31 @@ echo -e "  Cible   : ${BOLD}$TARGET_URL${RESET}"
 echo -e "  Sortie  : ${BOLD}$OUTPUT${RESET}"
 echo -e "  IA      : ${BOLD}$([ "$AI_MODE" == "true" ] && echo "activée ($AI_MODEL_FROM_CONF)" || echo "désactivée")${RESET}"
 echo -e "  Consent : ${BOLD}${CONSENT:-non défini}${RESET}\n"
+
+
+# ── Mode Docker ───────────────────────────────────────────────────────────────
+if [[ "$DOCKER_MODE" == "true" ]]; then
+  if ! command -v docker &>/dev/null; then
+    echo -e "${RED}❌ Docker non trouvé. Installer Docker : https://docs.docker.com/get-docker/${RESET}"
+    exit 1
+  fi
+  if ! docker image inspect cyberstrike-devsec:latest &>/dev/null 2>&1; then
+    echo -e "${CYAN}  ➜ Construction de l'image Docker (première fois ~10-15min)...${RESET}"
+    docker build -t cyberstrike-devsec:latest "$(dirname "$0")/.."
+  fi
+  echo -e "${CYAN}  ➜ Lancement du scan web dans le conteneur Docker...${RESET}"
+  DOCKER_ARGS=(
+    "--rm" "--network=host"
+    "-v" "$(realpath "${OUTPUT:-./security-reports}"):/reports"
+  )
+  [[ -f "$CONSENT" ]] && DOCKER_ARGS+=("-v" "$(realpath "$CONSENT"):/reports/consent-signed.pdf:ro")
+  [[ -n "${GITHUB_COPILOT_TOKEN:-}" ]] && DOCKER_ARGS+=("-e" "GITHUB_COPILOT_TOKEN=${GITHUB_COPILOT_TOKEN}")
+
+  SCAN_ARGS=("scan-web" "--target" "$TARGET_URL" "--consent" "/reports/consent-signed.pdf" "--output" "/reports")
+  [[ "$AI_MODE" == "true" ]] && SCAN_ARGS+=("--ai")
+
+  exec docker run "${DOCKER_ARGS[@]}" cyberstrike-devsec:latest "${SCAN_ARGS[@]}"
+fi
 
 # ── Vérifications préalables ──────────────────────────────────────────────────
 if [[ -z "$CONSENT" || ! -f "$CONSENT" ]]; then

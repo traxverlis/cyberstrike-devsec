@@ -15,6 +15,7 @@
 #   --no-git            Skip git history scanning (faster for large repos)
 #   --ai                Enable AI-powered analysis via GitHub Copilot (requires config.yaml)
 #   --ai-config <path>  Path to config.yaml for AI provider (default: ./config.yaml)
+#   --docker            Run inside Docker container (no local install required)
 #   --help              Show this help
 #
 # Exit codes:
@@ -42,6 +43,7 @@ NO_GIT=false
 AI_MODE=false
 AI_CONFIG=""
 AI_MODEL_FROM_CONF=""
+DOCKER_MODE=false
 SCAN_START=$(date +%s)
 
 # ── Charger devsec.conf si présent ─────────────────────────────────────────
@@ -66,6 +68,33 @@ if [[ -f "$CONF" ]]; then
   echo -e "  \033[2m[devsec.conf chargé]\033[0m"
 fi
 
+# ── Mode Docker ───────────────────────────────────────────────────────────────
+if [[ "$DOCKER_MODE" == "true" ]]; then
+  if ! command -v docker &>/dev/null; then
+    echo -e "${RED}❌ Docker non trouvé. Installer Docker : https://docs.docker.com/get-docker/${RESET}"
+    exit 1
+  fi
+  # Vérifier si l'image existe, sinon la construire
+  if ! docker image inspect cyberstrike-devsec:latest &>/dev/null 2>&1; then
+    echo -e "${CYAN}  ➜ Construction de l'image Docker (première fois ~10-15min)...${RESET}"
+    docker build -t cyberstrike-devsec:latest "$(dirname "$0")/.."
+  fi
+  echo -e "${CYAN}  ➜ Lancement dans le conteneur Docker...${RESET}"
+  DOCKER_ARGS=(
+    "--rm"
+    "-v" "$(realpath "${TARGET:-.}"):/workspace:ro"
+    "-v" "$(realpath "${OUTPUT:-./security-reports}"):/reports"
+  )
+  [[ -n "${GITHUB_COPILOT_TOKEN:-}" ]] && DOCKER_ARGS+=("-e" "GITHUB_COPILOT_TOKEN=${GITHUB_COPILOT_TOKEN}")
+  [[ -n "${OPENAI_API_KEY:-}" ]]       && DOCKER_ARGS+=("-e" "OPENAI_API_KEY=${OPENAI_API_KEY}")
+  
+  SCAN_ARGS=("scan" "--target" "/workspace" "--output" "/reports" "--mode" "$MODE")
+  [[ "$AI_MODE" == "true" ]] && SCAN_ARGS+=("--ai")
+  [[ "$NO_GIT" == "true" ]]  && SCAN_ARGS+=("--no-git")
+  
+  exec docker run "${DOCKER_ARGS[@]}" cyberstrike-devsec:latest "${SCAN_ARGS[@]}"
+fi
+
 # ── Parse arguments ───────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -74,6 +103,7 @@ while [[ $# -gt 0 ]]; do
     --mode)     MODE="$2"; shift 2 ;;
     --severity) SEVERITY="$2"; shift 2 ;;
     --no-git)   NO_GIT=true; shift ;;
+    --docker)   DOCKER_MODE=true; shift ;;
     --ai)       AI_MODE=true; shift ;;
     --ai-config) AI_CONFIG="$2"; shift 2 ;;
     --help|-h)
