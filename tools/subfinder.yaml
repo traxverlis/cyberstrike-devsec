@@ -1,0 +1,81 @@
+name: "subfinder"
+command: "subfinder"
+enabled: true
+short_description: "Passive subdomain discovery tool using multiple OSINT sources"
+description: |
+  Subfinder is a fast passive subdomain enumeration tool using multiple sources
+  including Shodan, Censys, crt.sh, VirusTotal, and 40+ other data sources.
+  Used in PTES Phase 2 (Information Gathering / Reconnaissance).
+
+  **Sources:**
+  - Certificate transparency logs (crt.sh)
+  - Shodan, Censys, FOFA
+  - VirusTotal, SecurityTrails
+  - DNS brute-force (with -active flag)
+  - And 40+ more passive sources
+
+  **PTES phase:** 2 — Information Gathering
+
+  Note: Passive mode only — does not interact with target directly.
+  API keys needed for some sources (configurable via ~/.config/subfinder/provider-config.yaml)
+
+parameters:
+  - name: "domain"
+    type: "string"
+    description: "Target domain to enumerate subdomains for (e.g. example.com)"
+    required: true
+    flag: "-d"
+    format: "flag"
+
+  - name: "output"
+    type: "string"
+    description: "Output file path for discovered subdomains"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "json"
+    type: "bool"
+    description: "Output in JSON format"
+    required: false
+    flag: "-json"
+    format: "flag"
+    default: false
+
+  - name: "silent"
+    type: "bool"
+    description: "Silent mode — only print subdomains"
+    required: false
+    flag: "-silent"
+    format: "flag"
+    default: true
+
+  - name: "timeout"
+    type: "int"
+    description: "Timeout in seconds for passive sources"
+    required: false
+    flag: "-timeout"
+    format: "flag"
+    default: 30
+
+  - name: "threads"
+    type: "int"
+    description: "Number of concurrent goroutines"
+    required: false
+    flag: "-t"
+    format: "flag"
+    default: 10
+
+  - name: "active"
+    type: "bool"
+    description: "Enable active subdomain verification (DNS resolution)"
+    required: false
+    flag: "-active"
+    format: "flag"
+    default: false
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra subfinder arguments"
+    required: false
+    format: "positional"

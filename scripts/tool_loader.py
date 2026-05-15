@@ -146,8 +146,14 @@ class ToolLoader:
             "grype", "semgrep", "gitleaks", "trivy",
             "syft", "checkov", "trufflehog", "osv-scanner",
         ]
-        level2_tools = level1_tools + ["nmap", "nuclei-passive", "nikto", "testssl"]
-        level3_tools = level2_tools + ["nuclei-exploit", "sqlmap", "ffuf", "zaproxy"]
+        level2_tools = level1_tools + [
+            "nmap", "nuclei-passive", "nikto", "testssl",
+            "whatweb", "subfinder", "gobuster", "wapiti",
+        ]
+        level3_tools = level2_tools + [
+            "nuclei-exploit", "sqlmap", "ffuf", "zaproxy",
+            "dalfox", "hydra", "feroxbuster",
+        ]
 
         mapping = {1: level1_tools, 2: level2_tools, 3: level3_tools}
         all_tools = mapping.get(level, level1_tools)
@@ -654,6 +660,35 @@ class PTESEngine:
                 out, run_fn)
             scans.append(s)
 
+        # subfinder — découverte de sous-domaines (si cible est un domaine)
+        import re as _re
+        host_match = _re.search(r'https?://([^/:]+)', self.target)
+        host = host_match.group(1) if host_match else self.target
+        # Pas un IP pur ?
+        if self._available("subfinder") and not _re.match(r'^\d+\.\d+\.\d+\.\d+$', host):
+            out = d / "subfinder.txt"
+            s = self._scan("p2-subfinder", f"Subdomain enumeration (subfinder) → {host}",
+                ["subfinder", "-d", host, "-silent", "-o", str(out)],
+                out, run_fn, timeout=60)
+            scans.append(s)
+            # Ajouter les sous-domaines comme endpoints potentiels
+            if out.exists():
+                for subdomain in out.read_text().splitlines():
+                    subdomain = subdomain.strip()
+                    if subdomain:
+                        self.ctx.add_endpoint(f"http://{subdomain}")
+
+        # enum4linux — enumération SMB si port 445/139 détecté
+        smb_ports = [p for p in self.ctx.open_ports if p.get("port") in (139, 445)]
+        if smb_ports and self._available("enum4linux"):
+            for smb in smb_ports[:2]:
+                out = d / f"enum4linux-{smb['host']}.txt"
+                s = self._scan(f"p2-enum4linux-{smb['host']}",
+                    f"SMB enumeration → {smb['host']} (port {smb['port']})",
+                    ["enum4linux", "-a", smb["host"]],
+                    out, run_fn, timeout=120)
+                scans.append(s)
+
         # testssl — analyse SSL/TLS sur les ports HTTPS
         if self._available("testssl.sh"):
             # D'abord sur la cible principale
@@ -783,6 +818,46 @@ class PTESEngine:
                 scans.append(s)
                 self._parse_feroxbuster_jsonl(out)
 
+        # gobuster — découverte répertoires sur CHAQUE port HTTP
+        if self._available("gobuster"):
+            for port_info in self.ctx.http_ports()[:3]:
+                url = port_info.get("url", "")
+                if not url:
+                    continue
+                out = d / f"gobuster-{port_info['port']}.txt"
+                s = self._scan(f"p4-gobuster-{port_info['port']}",
+                    f"Directory brute-force (gobuster) → {url}",
+                    ["gobuster", "dir", "-u", url, "-q",
+                     "-w", "/usr/share/wordlists/dirb/common.txt",
+                     "-o", str(out), "-x", "php,html,txt,bak,conf,json",
+                     "-t", "20", "-k"],
+                    out, run_fn, timeout=300)
+                scans.append(s)
+                # Parser les résultats gobuster pour enrichir ctx.http_endpoints
+                if out.exists():
+                    for line in out.read_text().splitlines():
+                        if line.startswith("/") or (url in line and "Status" in line):
+                            path = line.split()[0].strip()
+                            if path.startswith("/"):
+                                self.ctx.add_endpoint(url.rstrip("/") + path)
+
+        # dalfox — scan XSS sur les endpoints avec paramètres URL
+        xss_candidates = [e for e in self.ctx.http_endpoints if "?" in e][:5]
+        if xss_candidates and self._available("dalfox"):
+            urls_file = d / "xss-candidates.txt"
+            urls_file.write_text("\n".join(xss_candidates))
+            out = d / "dalfox-xss.json"
+            s = self._scan("p4-dalfox", f"XSS scan (dalfox) → {len(xss_candidates)} endpoints",
+                ["dalfox", "pipe", "--output-format", "json", "-o", str(out),
+                 "--skip-bav", "--timeout", "10"],
+                out, run_fn, timeout=300)
+            # dalfox lit les URLs depuis stdin via pipe — on passe le fichier à part
+            # Utiliser 'file' mode à la place
+            scans[-1]["cmd"] = ["dalfox", "file", str(urls_file),
+                                 "--output-format", "json", "-o", str(out),
+                                 "--skip-bav", "--timeout", "10"]
+            scans.append(s) if s not in scans else None
+
         # wapiti — crawler + scan vulnérabilités web
         if self._available("wapiti"):
             out = d / "wapiti.json"
@@ -842,6 +917,31 @@ class PTESEngine:
                 [zap_cmd, "-t", self.target, "-J", str(out), "-l", "WARN"],
                 out, run_fn, timeout=600)
             scans.append(s)
+
+        # hydra — brute-force des services d'authentification découverts
+        auth_services = [p for p in self.ctx.open_ports
+                        if p.get("service") in ("ssh", "ftp", "telnet", "rdp")]
+        if auth_services and self._available("hydra"):
+            for svc in auth_services[:2]:
+                out = d / f"hydra-{svc['service']}-{svc['port']}.txt"
+                # Wordlists légères pour test de credentials communs
+                user_list = "/usr/share/wordlists/metasploit/default_users_for_services.txt"
+                pass_list = "/usr/share/wordlists/metasploit/default_pass_for_services.txt"
+                # Fallback si pas de wordlists metasploit
+                if not Path(user_list).exists():
+                    user_list_content = "admin\nroot\ntest\nguest\nuser"
+                    pass_list_content = "admin\npassword\n123456\nroot\ntest\n"
+                    Path("/tmp/hydra-users.txt").write_text(user_list_content)
+                    Path("/tmp/hydra-pass.txt").write_text(pass_list_content)
+                    user_list = "/tmp/hydra-users.txt"
+                    pass_list = "/tmp/hydra-pass.txt"
+                s = self._scan(f"p5-hydra-{svc['service']}",
+                    f"Credential test (hydra) → {svc['host']}:{svc['port']} [{svc['service']}]",
+                    ["hydra", "-L", user_list, "-P", pass_list,
+                     "-t", "4", "-o", str(out),
+                     svc["host"], svc["service"]],
+                    out, run_fn, timeout=180)
+                scans.append(s)
 
         # ffuf — fuzzing des paramètres sur les endpoints vulnérables
         if self._available("ffuf"):

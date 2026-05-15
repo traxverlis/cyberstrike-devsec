@@ -1,143 +1,56 @@
-# tools/whatweb.yaml — Web Technology Fingerprinting
-# CyberStrike DevSec — Level 2 Active Scan
-# WARNING: Only use against authorized targets.
-
-name: whatweb
+name: "whatweb"
+command: "whatweb"
+enabled: true
+short_description: "Web technology fingerprinting — CMS, frameworks, server software, versions"
 description: |
-  Identifies web technologies including CMS, frameworks, server software,
-  analytics, JavaScript libraries, and more. Operates passively at low
-  aggression levels; more intrusive at higher levels.
+  WhatWeb identifies web technologies including content management systems (CMS),
+  blogging platforms, JavaScript libraries, web servers, and embedded devices.
+  Used in PTES Phase 2 (Information Gathering) to build the technology stack map.
 
-binary: whatweb
-version_check: "whatweb --version"
+  **Main features:**
+  - 1800+ plugins for technology detection
+  - Passive and aggressive scanning modes
+  - JSON/XML/CSV output formats
+  - Identifies: WordPress, Drupal, Joomla, Apache, Nginx, PHP, jQuery...
+
+  **PTES phase:** 2 — Information Gathering
+
+  ⚠️ Aggressive mode generates HTTP traffic — use only on authorized targets.
 
 parameters:
-  target:
-    description: |
-      Target URL, IP address, hostname, or file with targets.
-      Supports wildcards and CIDR ranges at higher aggression levels.
-    type: string
+  - name: "target"
+    type: "string"
+    description: "Target URL or IP address (e.g. https://example.com)"
     required: true
-    example: "https://example.com"
+    position: 0
+    format: "positional"
 
-  aggression:
-    description: |
-      Aggression level (1–4):
-        1 — Stealthy: Single request per target (passive-safe)
-        2 — Unused (same as 1)
-        3 — Aggressive: Follows redirects, requests additional paths
-        4 — Heavy: Sends many requests per target (may trigger WAF/IDS)
-      Recommended: 1 for initial recon, 3 for deeper fingerprinting.
-    type: integer
-    values: [1, 2, 3, 4]
-    default: 1
+  - name: "aggression"
+    type: "string"
+    description: "Aggression level: 1=stealthy, 3=aggressive, 4=heavy"
     required: false
+    flag: "--aggression"
+    format: "flag"
+    default: "1"
+    options: ["1", "2", "3", "4"]
 
-  output-format:
-    description: |
-      Output format:
-        json   — Structured JSON for parsing (-log-json)
-        xml    — XML format (-log-xml)
-        brief  — One line per target (-log-brief)
-        verbose — Full plugin output (-v)
-    type: enum
-    values: [json, xml, brief, verbose]
-    default: json
+  - name: "log-json"
+    type: "string"
+    description: "Log to JSON file path"
     required: false
+    flag: "--log-json"
+    format: "flag"
 
-  output-file:
-    description: Path to write output. Leave empty for stdout.
-    type: string
+  - name: "quiet"
+    type: "bool"
+    description: "Quiet mode — suppress banner"
     required: false
-    example: "/tmp/whatweb_results.json"
-
-  user-agent:
-    description: Custom User-Agent string to use for requests.
-    type: string
-    required: false
-    default: "WhatWeb/0.5.5"
-    example: "Mozilla/5.0 (compatible; SecurityAudit/1.0)"
-
-  follow-redirect:
-    description: |
-      Redirect following behavior:
-        never    — Do not follow redirects
-        http-only — Follow only HTTP→HTTP redirects
-        meta-only — Follow only meta-refresh redirects
-        same-site — Follow same-site redirects only
-        always   — Follow all redirects
-    type: enum
-    values: [never, http-only, meta-only, same-site, always]
-    default: always
-    required: false
-
-  plugins:
-    description: |
-      Comma-separated list of plugins to enable (or 'all').
-      Examples: Apache, WordPress, PHP, jQuery, Bootstrap, Google-Analytics
-      Run `whatweb --list-plugins` to see all available plugins.
-    type: string
-    required: false
-    default: "all"
-    example: "Apache,PHP,WordPress,jQuery"
-
-  no-errors:
-    description: Suppress error messages in output
-    type: boolean
+    flag: "--quiet"
+    format: "flag"
     default: false
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra WhatWeb arguments"
     required: false
-
-  threads:
-    description: Number of concurrent threads (for bulk scanning)
-    type: integer
-    default: 25
-    required: false
-
-  max-redirects:
-    description: Maximum number of redirects to follow
-    type: integer
-    default: 10
-    required: false
-
-command_template: |
-  # Basic fingerprint (aggression 1, JSON):
-  # whatweb -a 1 --log-json=/tmp/whatweb.json https://example.com
-
-  # Deeper scan with redirect following:
-  # whatweb -a 3 --log-json=/tmp/whatweb.json --follow-redirect=always https://example.com
-
-  whatweb \
-    -a {{ aggression }} \
-    --user-agent="{{ user-agent }}" \
-    --follow-redirect={{ follow-redirect }} \
-    --max-redirects={{ max-redirects }} \
-    {% if threads %}--threads={{ threads }}{% endif %} \
-    {% if plugins and plugins != "all" %}--plugins={{ plugins }}{% endif %} \
-    {% if no-errors %}--no-errors{% endif %} \
-    {% if output-format == "json" and output-file %}--log-json={{ output-file }}{% endif %} \
-    {% if output-format == "xml" and output-file %}--log-xml={{ output-file }}{% endif %} \
-    {% if output-format == "brief" and output-file %}--log-brief={{ output-file }}{% endif %} \
-    {% if output-format == "verbose" %}-v{% endif %} \
-    {{ target }}
-
-output_schema:
-  results:
-    - target: string
-      http_status: integer
-      request_config:
-        user_agent: string
-      plugins:
-        - name: string
-          version: string
-          string: string
-
-notes:
-  - Aggression 1 is sufficient for initial technology detection
-  - Higher aggression levels may trigger intrusion detection systems
-  - Combine with nmap service scan for comprehensive fingerprinting
-  - JSON output integrates well with downstream processing scripts
-  - Some plugins require follow-redirect=always to detect CMS correctly
-
-authorization_reminder: |
-  ⚠️  LEGAL NOTICE: Web fingerprinting, even at low aggression, constitutes
-  active reconnaissance. Ensure written authorization before scanning.
+    format: "positional"

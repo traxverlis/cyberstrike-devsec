@@ -1,0 +1,89 @@
+name: "dalfox"
+command: "dalfox"
+enabled: true
+short_description: "Fast XSS scanner and parameter analyzer — finds reflected, stored and DOM XSS"
+description: |
+  DalFox is a powerful open-source XSS scanning tool and parameter analyzer.
+  Finds reflected XSS, stored XSS, and DOM-based XSS vulnerabilities.
+  Used in PTES Phase 4 (Vulnerability Analysis) and Phase 5 (Exploitation).
+
+  **Main features:**
+  - Reflected, stored, DOM-based XSS detection
+  - Parameter discovery and analysis
+  - Pipe mode for integration with other tools
+  - Custom payloads and bypass techniques
+  - Blind XSS with callback support
+
+  **PTES phase:** 4 — Vulnerability Analysis, 5 — Exploitation
+
+  ⚠️ Active scanning — written authorization required.
+
+parameters:
+  - name: "mode"
+    type: "string"
+    description: "Scan mode: url (single URL), pipe (stdin URLs), file (URL list file)"
+    required: true
+    position: 0
+    format: "positional"
+    options: ["url", "pipe", "file"]
+    default: "url"
+
+  - name: "target"
+    type: "string"
+    description: "Target URL with parameters (e.g. https://example.com/search?q=test)"
+    required: false
+    position: 1
+    format: "positional"
+
+  - name: "output"
+    type: "string"
+    description: "Output file for results"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "output-format"
+    type: "string"
+    description: "Output format: plain, json, csv"
+    required: false
+    flag: "--output-format"
+    format: "flag"
+    default: "json"
+    options: ["plain", "json", "csv"]
+
+  - name: "worker"
+    type: "int"
+    description: "Number of parallel workers"
+    required: false
+    flag: "--worker"
+    format: "flag"
+    default: 100
+
+  - name: "timeout"
+    type: "int"
+    description: "Request timeout in seconds"
+    required: false
+    flag: "--timeout"
+    format: "flag"
+    default: 10
+
+  - name: "blind"
+    type: "string"
+    description: "Blind XSS callback URL (e.g. https://your-server.com/xss)"
+    required: false
+    flag: "--blind"
+    format: "flag"
+
+  - name: "skip-bav"
+    type: "bool"
+    description: "Skip BAV analysis (Basic Another Vulnerability)"
+    required: false
+    flag: "--skip-bav"
+    format: "flag"
+    default: false
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra dalfox arguments"
+    required: false
+    format: "positional"

@@ -1,0 +1,71 @@
+name: "dirb"
+command: "dirb"
+enabled: true
+short_description: "Web content scanner — brute-forces directories and files using wordlists"
+description: |
+  DIRB is a web content scanner that looks for existing and hidden web objects
+  by launching a dictionary-based attack against a web server.
+  Lightweight and focused on recursive directory/file discovery.
+
+  **PTES phase:** 4 — Vulnerability Analysis
+
+  ⚠️ Generates HTTP traffic — written authorization required.
+
+parameters:
+  - name: "url"
+    type: "string"
+    description: "Target URL (e.g. http://example.com/)"
+    required: true
+    position: 0
+    format: "positional"
+
+  - name: "wordlist"
+    type: "string"
+    description: "Path to wordlist (default: /usr/share/dirb/wordlists/common.txt)"
+    required: false
+    position: 1
+    format: "positional"
+    default: "/usr/share/dirb/wordlists/common.txt"
+
+  - name: "output"
+    type: "string"
+    description: "Save output to this file"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "extensions"
+    type: "string"
+    description: "File extensions to append (e.g. .php,.html,.txt)"
+    required: false
+    flag: "-X"
+    format: "flag"
+
+  - name: "ignore-http-code"
+    type: "string"
+    description: "HTTP status codes to ignore (e.g. 403,404)"
+    required: false
+    flag: "-N"
+    format: "flag"
+
+  - name: "no-recursive"
+    type: "bool"
+    description: "Disable recursive scanning"
+    required: false
+    flag: "-r"
+    format: "flag"
+    default: false
+
+  - name: "silent"
+    type: "bool"
+    description: "Silent mode — don't show tested words"
+    required: false
+    flag: "-S"
+    format: "flag"
+    default: true
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra dirb arguments"
+    required: false
+    format: "positional"

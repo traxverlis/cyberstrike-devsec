@@ -1,0 +1,102 @@
+name: "hydra"
+command: "hydra"
+enabled: true
+short_description: "Fast password brute-force tool for network services (SSH, HTTP, FTP, SMB...)"
+description: |
+  THC Hydra is a fast and flexible online password brute-forcing tool.
+  Supports 50+ protocols including HTTP, SSH, FTP, SMB, RDP, MySQL, VNC...
+  Used in PTES Phase 5 (Exploitation) for credential testing.
+
+  **Supported protocols:**
+  - HTTP/HTTPS (GET, POST, form-based)
+  - SSH, FTP, SMTP, POP3, IMAP
+  - SMB, RDP, VNC, MySQL, PostgreSQL, MSSQL
+  - Cisco, LDAP, Telnet, and many more
+
+  **PTES phase:** 5 — Exploitation (credential attacks)
+
+  ⚠️ LEGAL WARNING: Only use against systems you own or have explicit written
+  authorization to test. Brute-force attacks may trigger account lockouts
+  and generate significant log entries.
+
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target IP address or hostname"
+    required: true
+    position: 0
+    format: "positional"
+
+  - name: "service"
+    type: "string"
+    description: |
+      Target service/protocol to attack.
+      Examples: ssh, http-post-form, ftp, smb, rdp, mysql, vnc
+    required: true
+    position: 1
+    format: "positional"
+    options: ["ssh", "ftp", "http-get", "http-post-form", "https-post-form", "smb", "rdp", "mysql", "postgresql", "vnc", "telnet", "smtp", "pop3", "imap", "ldap"]
+
+  - name: "username"
+    type: "string"
+    description: "Single username to test"
+    required: false
+    flag: "-l"
+    format: "flag"
+
+  - name: "userlist"
+    type: "string"
+    description: "Path to file containing list of usernames"
+    required: false
+    flag: "-L"
+    format: "flag"
+
+  - name: "password"
+    type: "string"
+    description: "Single password to test"
+    required: false
+    flag: "-p"
+    format: "flag"
+
+  - name: "passlist"
+    type: "string"
+    description: "Path to file containing list of passwords"
+    required: false
+    flag: "-P"
+    format: "flag"
+
+  - name: "port"
+    type: "int"
+    description: "Target port (overrides default for the service)"
+    required: false
+    flag: "-s"
+    format: "flag"
+
+  - name: "threads"
+    type: "int"
+    description: "Number of parallel tasks (default: 16)"
+    required: false
+    flag: "-t"
+    format: "flag"
+    default: 16
+
+  - name: "output"
+    type: "string"
+    description: "Write found credentials to this file"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "verbose"
+    type: "bool"
+    description: "Verbose output"
+    required: false
+    flag: "-V"
+    format: "flag"
+    default: false
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra hydra arguments"
+    required: false
+    format: "positional"

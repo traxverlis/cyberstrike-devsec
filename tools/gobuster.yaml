@@ -1,0 +1,100 @@
+name: "gobuster"
+command: "gobuster"
+enabled: true
+short_description: "Fast directory, DNS and vhost brute-force scanner for web content discovery"
+description: |
+  Gobuster is a fast brute-force scanner for web directories/files, DNS subdomains,
+  and virtual hostnames. Uses Go concurrency for high-speed enumeration.
+
+  **Modes:**
+  - dir  : Directory and file brute-forcing
+  - dns  : DNS subdomain enumeration
+  - vhost: Virtual hostname enumeration
+
+  **PTES phase:** 4 — Vulnerability Analysis (directory enumeration)
+
+  ⚠️ Generates significant HTTP traffic — written authorization required.
+
+parameters:
+  - name: "mode"
+    type: "string"
+    description: "Scan mode: dir (directories), dns (subdomains), vhost (virtual hosts)"
+    required: true
+    position: 0
+    format: "positional"
+    options: ["dir", "dns", "vhost"]
+    default: "dir"
+
+  - name: "url"
+    type: "string"
+    description: "Target URL (for dir/vhost mode, e.g. http://example.com)"
+    required: false
+    flag: "-u"
+    format: "flag"
+
+  - name: "domain"
+    type: "string"
+    description: "Target domain (for dns mode, e.g. example.com)"
+    required: false
+    flag: "-d"
+    format: "flag"
+
+  - name: "wordlist"
+    type: "string"
+    description: "Path to wordlist file"
+    required: true
+    flag: "-w"
+    format: "flag"
+    default: "/usr/share/wordlists/dirb/common.txt"
+
+  - name: "output"
+    type: "string"
+    description: "Output file path"
+    required: false
+    flag: "-o"
+    format: "flag"
+
+  - name: "threads"
+    type: "int"
+    description: "Number of concurrent threads (default: 10)"
+    required: false
+    flag: "-t"
+    format: "flag"
+    default: 10
+
+  - name: "extensions"
+    type: "string"
+    description: "File extensions to search for (e.g. php,html,txt,bak)"
+    required: false
+    flag: "-x"
+    format: "flag"
+
+  - name: "status-codes"
+    type: "string"
+    description: "HTTP status codes to include (default: 200,204,301,302,307,401,403)"
+    required: false
+    flag: "-s"
+    format: "flag"
+    default: "200,204,301,302,307,401,403"
+
+  - name: "no-tls-validation"
+    type: "bool"
+    description: "Skip TLS certificate verification"
+    required: false
+    flag: "-k"
+    format: "flag"
+    default: false
+
+  - name: "quiet"
+    type: "bool"
+    description: "Don't print banner and other noise"
+    required: false
+    flag: "-q"
+    format: "flag"
+    default: true
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra gobuster arguments"
+    required: false
+    format: "positional"

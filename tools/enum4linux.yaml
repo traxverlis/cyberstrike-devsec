@@ -1,0 +1,76 @@
+name: "enum4linux"
+command: "enum4linux"
+enabled: true
+short_description: "SMB/Samba enumeration tool — users, shares, policies, groups from Windows/Linux hosts"
+description: |
+  Enum4linux is a tool for enumerating information from Windows and Samba systems.
+  It wraps smbclient, rpcclient, net and nmblookup to extract:
+  - User lists and group memberships
+  - Shared resources (folders, printers)
+  - Password policies
+  - OS information
+  - Domain/workgroup membership
+
+  **PTES phase:** 2 — Information Gathering, 4 — Vulnerability Analysis
+
+  ⚠️ Written authorization required. Generates SMB traffic.
+
+parameters:
+  - name: "target"
+    type: "string"
+    description: "Target IP address or hostname"
+    required: true
+    position: 0
+    format: "positional"
+
+  - name: "all"
+    type: "bool"
+    description: "Run all enumeration checks"
+    required: false
+    flag: "-a"
+    format: "flag"
+    default: true
+
+  - name: "users"
+    type: "bool"
+    description: "Enumerate users"
+    required: false
+    flag: "-U"
+    format: "flag"
+    default: false
+
+  - name: "shares"
+    type: "bool"
+    description: "Enumerate shares"
+    required: false
+    flag: "-S"
+    format: "flag"
+    default: false
+
+  - name: "password-policy"
+    type: "bool"
+    description: "Get password policy"
+    required: false
+    flag: "-P"
+    format: "flag"
+    default: false
+
+  - name: "username"
+    type: "string"
+    description: "Username for authenticated enumeration"
+    required: false
+    flag: "-u"
+    format: "flag"
+
+  - name: "password"
+    type: "string"
+    description: "Password for authenticated enumeration"
+    required: false
+    flag: "-p"
+    format: "flag"
+
+  - name: "additional_args"
+    type: "string"
+    description: "Extra enum4linux arguments"
+    required: false
+    format: "positional"
