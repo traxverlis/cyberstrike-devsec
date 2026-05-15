@@ -1,467 +1,379 @@
 #!/usr/bin/env bash
 # =============================================================================
 # CyberStrikeAI DevSec — install.sh
-# Automatic installation of all DevSec scanning tools
-# Supports: Linux (apt/yum/dnf) and macOS (Homebrew)
+# Installation complète en une seule commande
 #
-# Usage:
-#   ./scripts/install.sh
-#   ./scripts/install.sh --skip-python     (skip semgrep/pip-audit)
-#   ./scripts/install.sh --prefix /custom  (install binaries to custom path)
+# Couvre :
+#   - Outils de scan (grype, trivy, semgrep, gitleaks, trufflehog, syft,
+#                     osv-scanner, checkov, pip-audit, nuclei, nikto, testssl)
+#   - Dépendances Python (requirements.txt + scripts/consent/requirements.txt)
+#   - Génération PDF (pandoc + weasyprint)
+#
+# Usage :
+#   bash scripts/install.sh
+#   bash scripts/install.sh --dry-run      (simuler sans installer)
+#   bash scripts/install.sh --skip-python  (sauter pip/pipx tools)
 # =============================================================================
 set -euo pipefail
 
-# ── Colors ────────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+# ── Couleurs ──────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
-# ── Defaults ──────────────────────────────────────────────────────────────────
+# ── Options ───────────────────────────────────────────────────────────────────
 INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local/bin}"
 SKIP_PYTHON=false
-SKIP_GO=false
 DRY_RUN=false
-FAILED_TOOLS=()
-INSTALLED_TOOLS=()
-SKIPPED_TOOLS=()
+FAILED=()
+OK=()
 
-# ── Parse arguments ───────────────────────────────────────────────────────────
 for arg in "$@"; do
   case $arg in
     --skip-python) SKIP_PYTHON=true ;;
-    --skip-go)     SKIP_GO=true ;;
     --dry-run)     DRY_RUN=true ;;
     --prefix=*)    INSTALL_PREFIX="${arg#*=}" ;;
     --help|-h)
-      echo "Usage: $0 [--skip-python] [--skip-go] [--prefix=/path] [--dry-run]"
-      exit 0
-      ;;
+      echo "Usage: bash scripts/install.sh [--dry-run] [--skip-python] [--prefix=/path]"
+      exit 0 ;;
   esac
 done
 
-# ── Helper functions ──────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 log()     { echo -e "${CYAN}  ➜ $*${RESET}"; }
-success() { echo -e "${GREEN}  ✅ $*${RESET}"; }
+ok()      { echo -e "${GREEN}  ✅ $*${RESET}"; OK+=("$1"); }
 warn()    { echo -e "${YELLOW}  ⚠️  $*${RESET}"; }
-error()   { echo -e "${RED}  ❌ $*${RESET}"; }
-header()  { echo -e "\n${BOLD}${CYAN}══════════════════════════════════════════════${RESET}"; echo -e "${BOLD}${CYAN}  $*${RESET}"; echo -e "${BOLD}${CYAN}══════════════════════════════════════════════${RESET}\n"; }
+fail()    { echo -e "${RED}  ❌ $*${RESET}"; FAILED+=("$1"); }
+header()  { echo -e "\n${BOLD}${CYAN}━━━ $* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; }
+is_ok()   { command -v "$1" &>/dev/null; }
+run()     { [[ "$DRY_RUN" == "true" ]] && echo -e "${DIM}  [dry] $*${RESET}" || eval "$@"; }
 
-is_installed() { command -v "$1" > /dev/null 2>&1; }
+# ── Détecter l'OS ─────────────────────────────────────────────────────────────
+if   [[ "$OSTYPE" == "darwin"* ]];     then OS="macos"
+elif [[ -f /etc/debian_version ]];     then OS="debian"
+elif [[ -f /etc/redhat-release ]];     then OS="rhel"
+elif [[ -f /etc/arch-release ]];       then OS="arch"
+else                                        OS="unknown"
+fi
 
-# Detect OS
-detect_os() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "macos"
-  elif [[ -f /etc/debian_version ]]; then
-    echo "debian"
-  elif [[ -f /etc/redhat-release ]] || [[ -f /etc/fedora-release ]]; then
-    echo "rhel"
-  elif [[ -f /etc/arch-release ]]; then
-    echo "arch"
-  else
-    echo "unknown"
-  fi
-}
-
-OS=$(detect_os)
-
-# ── Banner ────────────────────────────────────────────────────────────────────
+# ── Bannière ──────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}"
-echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║     CyberStrikeAI DevSec — Tool Installer 🛡️      ║"
-echo "  ╚═══════════════════════════════════════════════════╝"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║     CyberStrikeAI DevSec — Installation complète 🛡️  ║"
+echo "  ╚══════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
-echo -e "  OS detected     : ${BOLD}${OS}${RESET}"
-echo -e "  Install prefix  : ${BOLD}${INSTALL_PREFIX}${RESET}"
-echo -e "  Skip Python     : ${BOLD}${SKIP_PYTHON}${RESET}"
+echo -e "  OS       : ${BOLD}${OS}${RESET}"
+echo -e "  Prefix   : ${BOLD}${INSTALL_PREFIX}${RESET}"
+[[ "$DRY_RUN" == "true" ]] && echo -e "  ${YELLOW}Mode : DRY RUN — aucune installation réelle${RESET}"
 echo ""
 
-if [[ "$DRY_RUN" == "true" ]]; then
-  warn "DRY RUN mode — no packages will be installed"
-  echo ""
-fi
+# ═════════════════════════════════════════════════════════════════════════════
+# PARTIE 1 — Dépendances système
+# ═════════════════════════════════════════════════════════════════════════════
+header "1/5 — Dépendances système"
 
-# ── Step 1: System Dependencies ──────────────────────────────────────────────
-header "Step 1: System Dependencies"
-
-install_system_deps() {
-  log "Installing: curl, wget, jq, git, tar, unzip"
-  if [[ "$DRY_RUN" == "true" ]]; then return 0; fi
-
+install_sys_deps() {
   case "$OS" in
     macos)
-      if ! is_installed brew; then
-        error "Homebrew not found. Install from https://brew.sh then re-run."
-        exit 1
-      fi
-      brew install curl wget jq git 2>/dev/null || true
+      is_ok brew || { error "Homebrew requis : https://brew.sh"; exit 1; }
+      run "brew install curl wget jq git unzip 2>/dev/null || true"
       ;;
     debian)
-      sudo apt-get update -qq
-      sudo apt-get install -y -qq curl wget jq git tar unzip gnupg lsb-release \
-        apt-transport-https ca-certificates software-properties-common
+      run "sudo apt-get update -qq"
+      run "sudo apt-get install -y -qq curl wget jq git tar unzip gnupg lsb-release \
+        apt-transport-https ca-certificates python3 python3-pip pipx pandoc \
+        libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+        libgdk-pixbuf2.0-0 libcairo2 libffi-dev nikto"
       ;;
     rhel)
-      sudo dnf install -y curl wget jq git tar unzip gnupg 2>/dev/null || \
-      sudo yum install -y curl wget jq git tar unzip gnupg
+      run "sudo dnf install -y curl wget jq git tar unzip gnupg python3 python3-pip nikto 2>/dev/null || \
+           sudo yum install -y curl wget jq git tar unzip gnupg python3 python3-pip"
+      run "sudo dnf install -y pandoc 2>/dev/null || warn 'pandoc non dispo via dnf — installer manuellement'"
       ;;
     arch)
-      sudo pacman -Sy --noconfirm curl wget jq git tar unzip
+      run "sudo pacman -Sy --noconfirm curl wget jq git tar unzip python python-pip pandoc nikto"
       ;;
     *)
-      warn "Unknown OS — skipping system dependency install. Ensure curl, wget, jq, git are available."
+      warn "OS inconnu — s'assurer que curl, wget, jq, git, python3, pandoc, nikto sont installés"
       ;;
   esac
-  success "System dependencies installed"
 }
 
-install_system_deps
+install_sys_deps && ok "sys-deps" || warn "Certaines dépendances système ont échoué"
 
-# ── Step 2: Grype (Anchore CVE Scanner) ──────────────────────────────────────
-header "Step 2: Grype — CVE Vulnerability Scanner"
+# ═════════════════════════════════════════════════════════════════════════════
+# PARTIE 2 — Outils de scan binaires
+# ═════════════════════════════════════════════════════════════════════════════
+header "2/5 — Outils de scan"
 
-install_grype() {
-  if is_installed grype; then
-    success "Grype already installed: $(grype version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("grype (pre-existing)")
-    return 0
-  fi
-  log "Downloading Grype..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Grype"; return 0; fi
-
+# ── grype ─────────────────────────────────────────────────────────────────────
+if is_ok grype; then
+  ok "grype (déjà installé : $(grype version 2>&1 | head -1))"
+else
+  log "Installation de grype..."
   if [[ "$OS" == "macos" ]]; then
-    brew install anchore/grype/grype
+    run "brew install anchore/grype/grype"
   else
-    curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
-      | sudo sh -s -- -b "$INSTALL_PREFIX"
+    run "curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b '$INSTALL_PREFIX'"
   fi
-  success "Grype installed: $(grype version 2>&1 | head -1)"
-  INSTALLED_TOOLS+=("grype")
-}
+  is_ok grype && ok "grype" || fail "grype"
+fi
 
-install_grype || { error "Failed to install Grype"; FAILED_TOOLS+=("grype"); }
-
-# ── Step 3: Trivy (Aqua Security) ────────────────────────────────────────────
-header "Step 3: Trivy — Universal Security Scanner"
-
-install_trivy() {
-  if is_installed trivy; then
-    success "Trivy already installed: $(trivy --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("trivy (pre-existing)")
-    return 0
+# ── trivy ─────────────────────────────────────────────────────────────────────
+if is_ok trivy; then
+  ok "trivy (déjà installé : $(trivy --version 2>&1 | head -1))"
+else
+  log "Installation de trivy..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install aquasecurity/trivy/trivy"
+  elif [[ "$OS" == "debian" ]]; then
+    run "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null"
+    run "echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' | sudo tee /etc/apt/sources.list.d/trivy.list"
+    run "sudo apt-get update -qq && sudo apt-get install -y trivy"
+  else
+    TRIVY_VER=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | jq -r .tag_name)
+    run "curl -sSfL 'https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VER}/trivy_${TRIVY_VER#v}_Linux-64bit.tar.gz' | sudo tar -xz -C '$INSTALL_PREFIX' trivy"
   fi
-  log "Downloading Trivy..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Trivy"; return 0; fi
+  is_ok trivy && ok "trivy" || fail "trivy"
+fi
 
+# ── gitleaks ──────────────────────────────────────────────────────────────────
+if is_ok gitleaks; then
+  ok "gitleaks (déjà installé)"
+else
+  log "Installation de gitleaks..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install gitleaks"
+  else
+    GL_VER=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r .tag_name)
+    run "curl -sSfL 'https://github.com/gitleaks/gitleaks/releases/download/${GL_VER}/gitleaks_${GL_VER#v}_linux_x64.tar.gz' | sudo tar -xz -C '$INSTALL_PREFIX' gitleaks"
+  fi
+  is_ok gitleaks && ok "gitleaks" || fail "gitleaks"
+fi
+
+# ── trufflehog ────────────────────────────────────────────────────────────────
+if is_ok trufflehog; then
+  ok "trufflehog (déjà installé)"
+else
+  log "Installation de trufflehog..."
+  TH_VER=$(curl -s https://api.github.com/repos/trufflesecurity/trufflehog/releases/latest | jq -r '.tag_name' | tr -d 'v')
+  ARCH="amd64"; [[ "$(uname -m)" =~ arm|aarch ]] && ARCH="arm64"
+  OS_SUFFIX="linux"; [[ "$OS" == "macos" ]] && OS_SUFFIX="darwin"
+  run "curl -sSfL 'https://github.com/trufflesecurity/trufflehog/releases/download/v${TH_VER}/trufflehog_${TH_VER}_${OS_SUFFIX}_${ARCH}.tar.gz' -o /tmp/trufflehog.tar.gz"
+  run "tar -xz -C /tmp -f /tmp/trufflehog.tar.gz trufflehog"
+  run "sudo mv /tmp/trufflehog '$INSTALL_PREFIX/trufflehog' && sudo chmod +x '$INSTALL_PREFIX/trufflehog'"
+  is_ok trufflehog && ok "trufflehog" || fail "trufflehog"
+fi
+
+# ── syft ──────────────────────────────────────────────────────────────────────
+if is_ok syft; then
+  ok "syft (déjà installé)"
+else
+  log "Installation de syft..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install anchore/syft/syft"
+  else
+    run "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b '$INSTALL_PREFIX'"
+  fi
+  is_ok syft && ok "syft" || fail "syft"
+fi
+
+# ── osv-scanner ───────────────────────────────────────────────────────────────
+if is_ok osv-scanner; then
+  ok "osv-scanner (déjà installé)"
+else
+  log "Installation de osv-scanner..."
+  OSV_VER=$(curl -s https://api.github.com/repos/google/osv-scanner/releases/latest | jq -r .tag_name)
+  ARCH="amd64"; [[ "$(uname -m)" =~ arm|aarch ]] && ARCH="arm64"
+  OS_SUFFIX="linux"; [[ "$OS" == "macos" ]] && OS_SUFFIX="darwin"
+  run "curl -sSfL 'https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_${OS_SUFFIX}_${ARCH}' -o /tmp/osv-scanner"
+  run "chmod +x /tmp/osv-scanner && sudo mv /tmp/osv-scanner '$INSTALL_PREFIX/osv-scanner'"
+  is_ok osv-scanner && ok "osv-scanner" || fail "osv-scanner"
+fi
+
+# ── nuclei ────────────────────────────────────────────────────────────────────
+if is_ok nuclei; then
+  ok "nuclei (déjà installé)"
+else
+  log "Installation de nuclei..."
+  if [[ "$OS" == "macos" ]]; then
+    run "brew install nuclei"
+  else
+    NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name')
+    NUCLEI_NUM="${NUCLEI_VER#v}"
+    ARCH="amd64"; [[ "$(uname -m)" =~ arm|aarch ]] && ARCH="arm64"
+    run "curl -sSfL 'https://github.com/projectdiscovery/nuclei/releases/download/${NUCLEI_VER}/nuclei_${NUCLEI_NUM}_linux_${ARCH}.zip' -o /tmp/nuclei.zip"
+    run "unzip -q /tmp/nuclei.zip -d /tmp/nuclei_bin && sudo mv /tmp/nuclei_bin/nuclei '$INSTALL_PREFIX/nuclei' && sudo chmod +x '$INSTALL_PREFIX/nuclei'"
+    run "rm -f /tmp/nuclei.zip"
+  fi
+  is_ok nuclei && ok "nuclei" || fail "nuclei"
+fi
+
+# ── nikto (installé en partie 1 via apt sur debian) ──────────────────────────
+if is_ok nikto; then
+  ok "nikto (déjà installé)"
+else
+  log "Installation de nikto..."
   case "$OS" in
-    macos)
-      brew install aquasecurity/trivy/trivy
-      ;;
-    debian)
-      wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
-        | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-      echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
-        | sudo tee /etc/apt/sources.list.d/trivy.list
-      sudo apt-get update -qq && sudo apt-get install -y trivy
-      ;;
-    rhel)
-      TRIVY_VER=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest \
-        | jq -r .tag_name)
-      curl -sSfL \
-        "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VER}/trivy_${TRIVY_VER#v}_Linux-64bit.rpm" \
-        -o /tmp/trivy.rpm
-      sudo rpm -i /tmp/trivy.rpm
-      ;;
-    *)
-      TRIVY_VER=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest \
-        | jq -r .tag_name)
-      curl -sSfL \
-        "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VER}/trivy_${TRIVY_VER#v}_Linux-64bit.tar.gz" \
-        | sudo tar -xz -C "$INSTALL_PREFIX" trivy
-      ;;
+    macos)   run "brew install nikto" ;;
+    rhel)    run "sudo dnf install -y nikto 2>/dev/null || sudo yum install -y nikto" ;;
+    arch)    run "sudo pacman -Sy --noconfirm nikto" ;;
+    *)       warn "nikto : installe-le via ton gestionnaire de paquets" ;;
   esac
-  success "Trivy installed: $(trivy --version 2>&1 | head -1)"
-  INSTALLED_TOOLS+=("trivy")
-}
+  is_ok nikto && ok "nikto" || warn "nikto non installé (optionnel)"
+fi
 
-install_trivy || { error "Failed to install Trivy"; FAILED_TOOLS+=("trivy"); }
+# ── testssl.sh ────────────────────────────────────────────────────────────────
+if is_ok testssl.sh; then
+  ok "testssl.sh (déjà installé)"
+else
+  log "Installation de testssl.sh..."
+  run "curl -sSfL https://testssl.sh/testssl.sh -o /tmp/testssl.sh"
+  run "chmod +x /tmp/testssl.sh && sudo cp /tmp/testssl.sh '$INSTALL_PREFIX/testssl.sh'"
+  is_ok testssl.sh && ok "testssl.sh" || warn "testssl.sh non installé (optionnel)"
+fi
 
-# ── Step 4: Semgrep (SAST) ───────────────────────────────────────────────────
-header "Step 4: Semgrep — Static Analysis (SAST)"
+# ═════════════════════════════════════════════════════════════════════════════
+# PARTIE 3 — Outils Python via pipx (semgrep, checkov, pip-audit)
+# ═════════════════════════════════════════════════════════════════════════════
+header "3/5 — Outils Python (pipx)"
 
-install_semgrep() {
-  if [[ "$SKIP_PYTHON" == "true" ]]; then
-    warn "Skipping Semgrep (--skip-python)"
-    SKIPPED_TOOLS+=("semgrep")
-    return 0
+if [[ "$SKIP_PYTHON" == "true" ]]; then
+  warn "Étape 3 ignorée (--skip-python)"
+else
+  export PATH="$PATH:$HOME/.local/bin"
+
+  # S'assurer que pipx est disponible
+  if ! is_ok pipx; then
+    log "Installation de pipx..."
+    run "pip3 install pipx --break-system-packages 2>/dev/null || pip3 install pipx"
+    run "pipx ensurepath 2>/dev/null || true"
+    export PATH="$PATH:$HOME/.local/bin"
   fi
-  if is_installed semgrep; then
-    success "Semgrep already installed: $(semgrep --version 2>&1)"
-    INSTALLED_TOOLS+=("semgrep (pre-existing)")
-    return 0
-  fi
-  log "Installing Semgrep via pip..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Semgrep"; return 0; fi
 
-  if ! is_installed python3; then
-    error "Python 3 not found. Install Python 3.9+ to use Semgrep."
-    FAILED_TOOLS+=("semgrep")
-    return 1
-  fi
-  pip3 install semgrep --quiet || pip install semgrep --quiet
-  success "Semgrep installed: $(semgrep --version 2>&1)"
-  INSTALLED_TOOLS+=("semgrep")
-}
+  for tool in semgrep checkov pip-audit; do
+    if is_ok "$tool"; then
+      ok "$tool (déjà installé)"
+    else
+      log "Installation de $tool via pipx..."
+      run "pipx install $tool 2>&1 | tail -2"
+      is_ok "$tool" && ok "$tool" || fail "$tool"
+    fi
+  done
+fi
 
-install_semgrep || { error "Failed to install Semgrep"; FAILED_TOOLS+=("semgrep"); }
+# ═════════════════════════════════════════════════════════════════════════════
+# PARTIE 4 — Dépendances Python du projet
+# ═════════════════════════════════════════════════════════════════════════════
+header "4/5 — Dépendances Python du projet"
 
-# ── Step 5: Gitleaks (Secret Detection) ──────────────────────────────────────
-header "Step 5: Gitleaks — Secret & Credential Scanner"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-install_gitleaks() {
-  if is_installed gitleaks; then
-    success "Gitleaks already installed: $(gitleaks version 2>&1)"
-    INSTALLED_TOOLS+=("gitleaks (pre-existing)")
-    return 0
-  fi
-  log "Downloading Gitleaks..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Gitleaks"; return 0; fi
+if [[ -f "$PROJECT_DIR/requirements.txt" ]]; then
+  log "Installation de requirements.txt..."
+  run "pip3 install -r '$PROJECT_DIR/requirements.txt' --break-system-packages -q 2>/dev/null || \
+       pip3 install -r '$PROJECT_DIR/requirements.txt' -q"
+  ok "requirements.txt"
+else
+  warn "requirements.txt introuvable dans $PROJECT_DIR"
+fi
 
-  if [[ "$OS" == "macos" ]]; then
-    brew install gitleaks
+if [[ -f "$PROJECT_DIR/scripts/consent/requirements.txt" ]]; then
+  log "Installation de scripts/consent/requirements.txt..."
+  run "pip3 install -r '$PROJECT_DIR/scripts/consent/requirements.txt' --break-system-packages -q 2>/dev/null || \
+       pip3 install -r '$PROJECT_DIR/scripts/consent/requirements.txt' -q"
+  ok "consent/requirements.txt"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PARTIE 5 — Génération PDF (pandoc + weasyprint)
+# ═════════════════════════════════════════════════════════════════════════════
+header "5/5 — Génération PDF (pandoc + weasyprint)"
+
+# pandoc (installé en partie 1 sur debian/arch, sinon homebrew)
+if is_ok pandoc; then
+  ok "pandoc (déjà installé : $(pandoc --version | head -1))"
+else
+  log "Installation de pandoc..."
+  case "$OS" in
+    macos)   run "brew install pandoc" ;;
+    rhel)    run "sudo dnf install -y pandoc 2>/dev/null || warn 'pandoc indisponible — télécharger depuis https://pandoc.org'" ;;
+    debian)  run "sudo apt-get install -y pandoc -qq" ;;
+    *)       warn "pandoc : installe depuis https://pandoc.org" ;;
+  esac
+  is_ok pandoc && ok "pandoc" || warn "pandoc non installé"
+fi
+
+# weasyprint
+export PATH="$PATH:$HOME/.local/bin"
+if is_ok weasyprint; then
+  ok "weasyprint (déjà installé)"
+else
+  log "Installation de weasyprint via pipx..."
+  run "pipx install weasyprint 2>&1 | tail -2"
+  is_ok weasyprint && ok "weasyprint" || fail "weasyprint"
+fi
+
+# Test rapide de génération PDF
+if is_ok weasyprint && [[ "$DRY_RUN" == "false" ]]; then
+  echo "<html><body><h1>CyberStrikeAI DevSec OK</h1></body></html>" > /tmp/_devsec_test.html
+  if weasyprint /tmp/_devsec_test.html /tmp/_devsec_test.pdf 2>/dev/null && [[ -s /tmp/_devsec_test.pdf ]]; then
+    ok "Génération PDF fonctionnelle ✓"
+    rm -f /tmp/_devsec_test.html /tmp/_devsec_test.pdf
   else
-    GL_VER=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
-      | jq -r .tag_name)
-    curl -sSfL \
-      "https://github.com/gitleaks/gitleaks/releases/download/${GL_VER}/gitleaks_${GL_VER#v}_linux_x64.tar.gz" \
-      | sudo tar -xz -C "$INSTALL_PREFIX" gitleaks
+    warn "weasyprint installé mais le test PDF a échoué — vérifier libpango"
   fi
-  success "Gitleaks installed: $(gitleaks version 2>&1)"
-  INSTALLED_TOOLS+=("gitleaks")
-}
+fi
 
-install_gitleaks || { error "Failed to install Gitleaks"; FAILED_TOOLS+=("gitleaks"); }
+# ═════════════════════════════════════════════════════════════════════════════
+# RÉSUMÉ FINAL
+# ═════════════════════════════════════════════════════════════════════════════
+echo ""
+echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BOLD}${CYAN}  Résumé de l'installation${RESET}"
+echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo ""
 
-# ── Step 6: Syft (SBOM Generator) ────────────────────────────────────────────
-header "Step 6: Syft — SBOM Generator"
-
-install_syft() {
-  if is_installed syft; then
-    success "Syft already installed: $(syft version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("syft (pre-existing)")
-    return 0
-  fi
-  log "Downloading Syft..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Syft"; return 0; fi
-
-  if [[ "$OS" == "macos" ]]; then
-    brew install anchore/syft/syft
-  else
-    curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-      | sudo sh -s -- -b "$INSTALL_PREFIX"
-  fi
-  success "Syft installed: $(syft version 2>&1 | head -1)"
-  INSTALLED_TOOLS+=("syft")
-}
-
-install_syft || { error "Failed to install Syft"; FAILED_TOOLS+=("syft"); }
-
-# ── Step 7: OSV-Scanner (Google) ─────────────────────────────────────────────
-header "Step 7: OSV-Scanner — Google OSV Database"
-
-install_osv_scanner() {
-  if [[ "$SKIP_GO" == "true" ]]; then
-    warn "Skipping osv-scanner (--skip-go)"
-    SKIPPED_TOOLS+=("osv-scanner")
-    return 0
-  fi
-  if is_installed osv-scanner; then
-    success "OSV-Scanner already installed: $(osv-scanner --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("osv-scanner (pre-existing)")
-    return 0
-  fi
-  log "Installing OSV-Scanner..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install OSV-Scanner"; return 0; fi
-
-  if [[ "$OS" == "macos" ]]; then
-    brew install osv-scanner 2>/dev/null || true
-  fi
-
-  # Try pre-built binary from GitHub releases
-  OSV_VER=$(curl -s https://api.github.com/repos/google/osv-scanner/releases/latest \
-    | jq -r .tag_name 2>/dev/null || echo "")
-
-  if [[ -n "$OSV_VER" ]]; then
-    ARCH="amd64"
-    [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]] && ARCH="arm64"
-    OS_SUFFIX="linux"
-    [[ "$OS" == "macos" ]] && OS_SUFFIX="darwin"
-    BINARY_URL="https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_${OS_SUFFIX}_${ARCH}"
-    curl -sSfL "$BINARY_URL" -o /tmp/osv-scanner
-    chmod +x /tmp/osv-scanner
-    sudo mv /tmp/osv-scanner "$INSTALL_PREFIX/osv-scanner"
-    success "OSV-Scanner installed: $(osv-scanner --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("osv-scanner")
-  elif is_installed go; then
-    go install github.com/google/osv-scanner/cmd/osv-scanner@latest
-    success "OSV-Scanner installed via Go"
-    INSTALLED_TOOLS+=("osv-scanner")
-  else
-    warn "Cannot install osv-scanner: no pre-built binary and Go not found"
-    warn "Install Go 1.21+ or download from: https://github.com/google/osv-scanner/releases"
-    SKIPPED_TOOLS+=("osv-scanner")
-  fi
-}
-
-install_osv_scanner || { warn "Failed to install OSV-Scanner (optional)"; SKIPPED_TOOLS+=("osv-scanner"); }
-
-# ── Step 8: TruffleHog (Advanced Secret Scanner) ─────────────────────────────
-header "Step 8: TruffleHog — Deep Secret Scanner"
-
-install_trufflehog() {
-  if is_installed trufflehog; then
-    success "TruffleHog already installed: $(trufflehog --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("trufflehog (pre-existing)")
-    return 0
-  fi
-  log "Downloading TruffleHog..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install TruffleHog"; return 0; fi
-
-  if [[ "$OS" == "macos" ]]; then
-    brew install trufflehog 2>/dev/null || true
-  fi
-
-  TH_VER=$(curl -s https://api.github.com/repos/trufflesecurity/trufflehog/releases/latest \
-    | jq -r .tag_name 2>/dev/null || echo "")
-  if [[ -n "$TH_VER" ]]; then
-    ARCH="amd64"
-    [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]] && ARCH="arm64"
-    OS_SUFFIX="linux"
-    [[ "$OS" == "macos" ]] && OS_SUFFIX="darwin"
-    curl -sSfL \
-      "https://github.com/trufflesecurity/trufflehog/releases/download/${TH_VER}/trufflehog_${OS_SUFFIX}_${ARCH}.tar.gz" \
-      | sudo tar -xz -C "$INSTALL_PREFIX" trufflehog
-    success "TruffleHog installed: $(trufflehog --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("trufflehog")
-  else
-    warn "Could not determine latest TruffleHog version — skipping"
-    SKIPPED_TOOLS+=("trufflehog")
-  fi
-}
-
-install_trufflehog || { warn "Failed to install TruffleHog (optional)"; SKIPPED_TOOLS+=("trufflehog"); }
-
-# ── Step 9: Checkov (IaC Security) ───────────────────────────────────────────
-header "Step 9: Checkov — IaC Security Scanner"
-
-install_checkov() {
-  if [[ "$SKIP_PYTHON" == "true" ]]; then
-    warn "Skipping Checkov (--skip-python)"
-    SKIPPED_TOOLS+=("checkov")
-    return 0
-  fi
-  if is_installed checkov; then
-    success "Checkov already installed: $(checkov --version 2>&1 | head -1)"
-    INSTALLED_TOOLS+=("checkov (pre-existing)")
-    return 0
-  fi
-  log "Installing Checkov via pip..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install Checkov"; return 0; fi
-
-  pip3 install checkov --quiet || pip install checkov --quiet
-  success "Checkov installed: $(checkov --version 2>&1 | head -1)"
-  INSTALLED_TOOLS+=("checkov")
-}
-
-install_checkov || { warn "Failed to install Checkov (optional)"; SKIPPED_TOOLS+=("checkov"); }
-
-# ── Step 10: pip-audit (Python) ──────────────────────────────────────────────
-header "Step 10: pip-audit — Python Dependency Auditor"
-
-install_pip_audit() {
-  if [[ "$SKIP_PYTHON" == "true" ]]; then
-    warn "Skipping pip-audit (--skip-python)"
-    SKIPPED_TOOLS+=("pip-audit")
-    return 0
-  fi
-  if is_installed pip-audit; then
-    success "pip-audit already installed: $(pip-audit --version 2>&1)"
-    INSTALLED_TOOLS+=("pip-audit (pre-existing)")
-    return 0
-  fi
-  log "Installing pip-audit..."
-  if [[ "$DRY_RUN" == "true" ]]; then success "[DRY] Would install pip-audit"; return 0; fi
-
-  pip3 install pip-audit --quiet || pip install pip-audit --quiet
-  success "pip-audit installed: $(pip-audit --version 2>&1)"
-  INSTALLED_TOOLS+=("pip-audit")
-}
-
-install_pip_audit || { warn "Failed to install pip-audit (optional)"; SKIPPED_TOOLS+=("pip-audit"); }
-
-# ── Post-installation verification ───────────────────────────────────────────
-header "Post-Installation Verification"
-
-ALL_TOOLS=("grype" "trivy" "semgrep" "gitleaks" "syft" "osv-scanner" "trufflehog" "checkov" "pip-audit" "jq")
-PASS_COUNT=0
-FAIL_COUNT=0
-
+# Vérification complète de tous les outils attendus
+ALL_TOOLS=(grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit nuclei nikto testssl.sh pandoc weasyprint)
+PASS=0; FAIL=0
 for tool in "${ALL_TOOLS[@]}"; do
-  if is_installed "$tool"; then
-    VER=$(${tool} --version 2>&1 | head -1 | sed 's/.*version //i' | awk '{print $1}' || echo "ok")
-    printf "  ${GREEN}✅${RESET}  %-15s %s\n" "$tool" "$VER"
-    ((PASS_COUNT++)) || true
+  if is_ok "$tool"; then
+    VER=$(${tool} --version 2>&1 | head -1 | tr -d '\n' || echo "ok")
+    printf "  ${GREEN}✅${RESET}  %-15s %s\n" "$tool" "${VER:0:40}"
+    ((PASS++)) || true
   else
-    printf "  ${YELLOW}⚠️ ${RESET}  %-15s NOT FOUND\n" "$tool"
-    ((FAIL_COUNT++)) || true
+    printf "  ${RED}❌${RESET}  %-15s NON INSTALLÉ\n" "$tool"
+    ((FAIL++)) || true
   fi
 done
 
-# ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}${CYAN}══════════════════════════════════════════════${RESET}"
-echo -e "${BOLD}${CYAN}  Installation Summary${RESET}"
-echo -e "${BOLD}${CYAN}══════════════════════════════════════════════${RESET}"
-echo ""
-echo -e "  Tools available  : ${GREEN}${BOLD}${PASS_COUNT}/${#ALL_TOOLS[@]}${RESET}"
-
-if [[ ${#INSTALLED_TOOLS[@]} -gt 0 ]]; then
-  echo ""
-  echo -e "  ${GREEN}Installed:${RESET}"
-  for t in "${INSTALLED_TOOLS[@]}"; do echo "    • $t"; done
-fi
-
-if [[ ${#SKIPPED_TOOLS[@]} -gt 0 ]]; then
-  echo ""
-  echo -e "  ${YELLOW}Skipped (optional):${RESET}"
-  for t in "${SKIPPED_TOOLS[@]}"; do echo "    • $t"; done
-fi
-
-if [[ ${#FAILED_TOOLS[@]} -gt 0 ]]; then
-  echo ""
-  echo -e "  ${RED}Failed (required):${RESET}"
-  for t in "${FAILED_TOOLS[@]}"; do echo "    • $t"; done
-fi
-
+echo -e "  Score : ${BOLD}${PASS}/${#ALL_TOOLS[@]}${RESET} outils opérationnels"
 echo ""
 
-if [[ ${#FAILED_TOOLS[@]} -gt 0 ]]; then
-  error "Some required tools failed to install. Check the errors above."
+# Ajouter le PATH au profil si pas déjà présent
+if ! grep -q 'HOME/.local/bin' ~/.bashrc 2>/dev/null; then
+  echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
+  echo -e "  ${DIM}→ PATH mis à jour dans ~/.bashrc${RESET}"
+fi
+
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+  echo -e "  ${YELLOW}⚠️  Outils en échec : ${FAILED[*]}${RESET}"
+  echo -e "  Consulte INSTALL.md section '7. Problèmes connus'"
   echo ""
-  echo "  Quick fixes:"
-  echo "  • Run with sudo if permission errors"
-  echo "  • Check your internet connection"
-  exit 1
+fi
+
+if [[ $FAIL -eq 0 ]]; then
+  echo -e "  ${GREEN}${BOLD}✅ Installation complète ! CyberStrikeAI DevSec est prêt.${RESET}"
 else
-  success "CyberStrikeAI DevSec is ready! 🛡️"
-  echo ""
-  echo "  Next steps:"
-  echo "  • Scan your project : ./scripts/scan.sh --target ./your-project"
-  echo "  • Scan your project : ./scripts/scan.sh"
-  echo "  • Verify tools      : voir INSTALL.md"
-  echo ""
+  echo -e "  ${YELLOW}${BOLD}⚠️  Installation partielle — certains outils manquent.${RESET}"
+  echo -e "  Les scans fonctionneront, mais certaines fonctionnalités seront limitées."
 fi
+
+echo ""
+echo -e "  ${BOLD}Prochaine étape :${RESET}"
+echo -e "  ${CYAN}1. Recharge ton terminal : source ~/.bashrc${RESET}"
+echo -e "  ${CYAN}2. Lance un scan         : ./scripts/scan.sh${RESET}"
+echo ""

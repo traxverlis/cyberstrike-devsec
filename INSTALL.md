@@ -1,7 +1,7 @@
 # 📦 Guide d'installation — CyberStrikeAI DevSec
 
-> **Pour débutants** — Suit ce guide de A à Z. Toutes les commandes sont prêtes à copier-coller.
-> Aucune commande supplémentaire à inventer.
+> **Pour débutants** — Deux commandes suffisent pour tout installer.
+> Aucune étape manuelle requise.
 
 ---
 
@@ -9,11 +9,9 @@
 
 1. [Prérequis système](#1-prérequis-système)
 2. [Récupérer le dépôt](#2-récupérer-le-dépôt)
-3. [Installer les outils de scan](#3-installer-les-outils-de-scan)
-4. [Installer les dépendances Python](#4-installer-les-dépendances-python)
-5. [Installer les outils de rapports PDF](#5-installer-les-outils-de-rapports-pdf)
-6. [Vérifier l'installation](#6-vérifier-linstallation)
-7. [Problèmes connus](#7-problèmes-connus)
+3. [Tout installer en une commande](#3-tout-installer-en-une-commande)
+4. [Vérifier l'installation](#4-vérifier-linstallation)
+5. [Problèmes connus](#5-problèmes-connus)
 
 ---
 
@@ -33,7 +31,6 @@
 - **Git** — pour cloner le dépôt
 - **Python 3.10+** — pour les scripts d'analyse
 - **curl** — pour télécharger les outils
-- **jq** — pour parser le JSON
 - Accès **sudo** (droits administrateur)
 
 **Vérifier que tu as tout :**
@@ -42,14 +39,13 @@
 git --version
 python3 --version
 curl --version | head -1
-jq --version
 ```
 
-Si une commande renvoie `command not found`, l'installer :
+Si une commande renvoie `command not found` :
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git python3 python3-pip curl jq unzip wget
+sudo apt-get install -y git python3 python3-pip curl
 ```
 
 ---
@@ -57,178 +53,62 @@ sudo apt-get install -y git python3 python3-pip curl jq unzip wget
 ## 2. Récupérer le dépôt
 
 ```bash
-# Cloner le dépôt
-git clone https://github.com/cyberstrike/devsec.git cyberstrike-devsec
-
-# Aller dans le dossier
+git clone https://github.com/traxverlis/cyberstrike-devsec.git
 cd cyberstrike-devsec
-
-# Vérifier que tout est là
-ls
 ```
 
 Tu dois voir : `README.md`, `scripts/`, `agents/`, `skills/`, `tools/`, `devsec.conf`, etc.
 
 ---
 
-## 3. Installer les outils de scan
-
-Lance le script d'installation fourni — il installe la majorité des outils automatiquement :
+## 3. Tout installer en une commande
 
 ```bash
 bash scripts/install.sh
 ```
 
-> ⏱️ Durée estimée : 2 à 5 minutes selon ta connexion.
+Ce script installe **tout en automatique** :
+- ✅ Outils de scan — grype, trivy, semgrep, gitleaks, trufflehog, syft, osv-scanner, checkov, pip-audit
+- ✅ Outils web — nuclei, nikto, testssl.sh
+- ✅ Dépendances Python — requirements.txt + scripts/consent/requirements.txt
+- ✅ Génération PDF — pandoc + weasyprint (test automatique inclus)
+- ✅ PATH — mis à jour dans `~/.bashrc`
 
-À la fin, le script affiche un résumé du type :
+> ⏱️ Durée estimée : 3 à 8 minutes selon ta connexion.
+
+À la fin, tu verras un résumé :
+
 ```
-✅ grype    ✅ trivy    ✅ gitleaks    ✅ syft    ✅ osv-scanner
-⚠️  semgrep  ⚠️  checkov  ⚠️  pip-audit  ⚠️  trufflehog
-```
+━━━ Résumé de l'installation ━━━━━━━━━━━━━━━━━━━━━━━
 
-Si des outils sont marqués `⚠️ NOT FOUND`, passe à la section suivante pour les installer manuellement.
+  ✅  grype           grype 0.112.0
+  ✅  trivy           Version: 0.70.0
+  ✅  semgrep         1.163.0
+  ...
+  ✅  weasyprint      WeasyPrint version 68.1
 
----
+  Score : 14/14 outils opérationnels
 
-### 3a. Installer les outils manquants manuellement
+  ✅ Installation complète ! CyberStrikeAI DevSec est prêt.
 
-#### semgrep, checkov, pip-audit
-
-Sur Ubuntu/Debian, `pip install` est bloqué par le système. Il faut utiliser **pipx** :
-
-```bash
-# Installer pipx
-pip3 install pipx --break-system-packages
-
-# Ajouter pipx au PATH
-echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
-export PATH="$PATH:$HOME/.local/bin"
-
-# Installer les outils
-pipx install semgrep
-pipx install checkov
-pipx install pip-audit
-```
-
-#### trufflehog
-
-Le script `install.sh` contient un bug d'URL pour trufflehog. Voici la commande corrigée :
-
-```bash
-# Récupérer la dernière version
-LATEST=$(curl -s https://api.github.com/repos/trufflesecurity/trufflehog/releases/latest \
-  | jq -r '.tag_name' | tr -d 'v')
-
-# Télécharger et installer
-curl -fsSL \
-  "https://github.com/trufflesecurity/trufflehog/releases/download/v${LATEST}/trufflehog_${LATEST}_linux_amd64.tar.gz" \
-  -o /tmp/trufflehog.tar.gz
-
-tar -xz -C /tmp -f /tmp/trufflehog.tar.gz trufflehog
-sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
-sudo chmod +x /usr/local/bin/trufflehog
-```
-
-#### nuclei
-
-```bash
-# Récupérer la dernière version
-NUCLEI_VER=$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
-  | jq -r '.tag_name')
-NUCLEI_VER_NUM=$(echo $NUCLEI_VER | tr -d 'v')
-
-# Télécharger et installer
-curl -fsSL \
-  "https://github.com/projectdiscovery/nuclei/releases/download/${NUCLEI_VER}/nuclei_${NUCLEI_VER_NUM}_linux_amd64.zip" \
-  -o /tmp/nuclei.zip
-
-unzip -q /tmp/nuclei.zip -d /tmp/nuclei_bin
-sudo mv /tmp/nuclei_bin/nuclei /usr/local/bin/nuclei
-sudo chmod +x /usr/local/bin/nuclei
-```
-
-#### nikto
-
-```bash
-sudo apt-get install -y nikto
-```
-
-#### testssl.sh
-
-```bash
-curl -fsSL https://testssl.sh/testssl.sh -o /tmp/testssl.sh
-chmod +x /tmp/testssl.sh
-sudo cp /tmp/testssl.sh /usr/local/bin/testssl.sh
+  Prochaine étape :
+  1. Recharge ton terminal : source ~/.bashrc
+  2. Lance un scan         : ./scripts/scan.sh
 ```
 
 ---
 
-## 4. Installer les dépendances Python
+## 4. Vérifier l'installation
 
-Les scripts Python du projet (pipeline, consentement, rapports) nécessitent quelques librairies :
-
-```bash
-# Dans le dossier du projet
-pip3 install -r requirements.txt --break-system-packages
-```
-
-Pour les scripts de consentement (génération PDF de demande d'autorisation) :
-
-```bash
-pip3 install -r scripts/consent/requirements.txt --break-system-packages
-```
-
-> Ces dépendances incluent : `reportlab`, `qrcode`, `Pillow`, `requests`, `pdfplumber`, `rich`.
-
----
-
-## 5. Installer les outils de rapports PDF
-
-Les rapports PDF sont générés automatiquement en fin de scan via **pandoc** et **weasyprint**.
-
-```bash
-# pandoc (conversion Markdown → HTML)
-sudo apt-get install -y pandoc
-
-# Dépendances système pour weasyprint
-sudo apt-get install -y \
-  libpango-1.0-0 \
-  libpangoft2-1.0-0 \
-  libpangocairo-1.0-0 \
-  libgdk-pixbuf2.0-0 \
-  libcairo2 \
-  libffi-dev
-
-# weasyprint (conversion HTML → PDF, sans LaTeX)
-export PATH="$PATH:$HOME/.local/bin"
-pipx install weasyprint
-```
-
-Tester que la génération PDF fonctionne :
-
-```bash
-export PATH="$PATH:$HOME/.local/bin"
-echo "<html><body><h1>Test CyberStrikeAI</h1></body></html>" > /tmp/test.html
-weasyprint /tmp/test.html /tmp/test.pdf
-ls -lh /tmp/test.pdf
-```
-
-Tu dois voir un fichier `test.pdf` de quelques Ko. Si c'est le cas, tout est prêt.
-
----
-
-## 6. Vérifier l'installation
-
-Lance cette commande pour vérifier que tous les outils sont bien installés :
+Après un `source ~/.bashrc` (ou nouveau terminal) :
 
 ```bash
 export PATH="$PATH:$HOME/.local/bin"
 
 for tool in grype trivy semgrep gitleaks trufflehog syft osv-scanner checkov pip-audit nuclei nikto testssl.sh pandoc weasyprint; do
   command -v $tool &>/dev/null \
-    && echo "✅ $tool — OK" \
-    || echo "❌ $tool — MANQUANT (voir section 3)"
+    && echo "✅ $tool" \
+    || echo "❌ $tool — MANQUANT"
 done
 ```
 
@@ -236,76 +116,58 @@ done
 
 ---
 
-## 7. Problèmes connus
+## 5. Problèmes connus
 
 ### `externally-managed-environment` lors de `pip install`
 
-**Cause :** Debian/Ubuntu bloque `pip install` en dehors d'un virtualenv depuis Python 3.11+.
-
-**Solution :** Utiliser `pipx` (voir section 3a) ou ajouter `--break-system-packages` :
+**Cause :** Debian/Ubuntu bloque `pip install` hors virtualenv depuis Python 3.11+.
+**Solution :** Le script utilise automatiquement `pipx` pour les outils Python. Si ça échoue manuellement :
 
 ```bash
-pip3 install <paquet> --break-system-packages
+pip3 install pipx --break-system-packages
+export PATH="$PATH:$HOME/.local/bin"
+pipx install semgrep
 ```
-
-### `trufflehog: command not found` après `install.sh`
-
-**Cause :** Bug dans `install.sh` — l'URL de téléchargement est incorrecte.
-
-**Solution :** Suivre la section 3a — Installation manuelle de trufflehog.
 
 ### `weasyprint: cannot load library 'libpango-1.0-0'`
 
-**Cause :** Dépendances système manquantes.
-
+**Cause :** Dépendances système manquantes (normalement installées par `install.sh`).
 **Solution :**
+
 ```bash
 sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libcairo2
 ```
 
-### `verify-consent.py: error: unrecognized arguments: --level`
+### Un outil spécifique a échoué
 
-**Cause :** Bug dans `scripts/devsec-pipeline.py` (ligne 123 dans la version initiale).
-
-**Statut :** ✅ Corrigé dans le dépôt — si tu rencontres cette erreur, mets à jour le dépôt :
-```bash
-git pull
-```
-
----
-
-## Installation sur macOS
-
-Les étapes sont identiques sauf pour les dépendances système — utiliser **Homebrew** :
+Relance le script — il saute automatiquement les outils déjà installés :
 
 ```bash
-# Installer Homebrew si absent
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Dépendances système
-brew install git python curl jq unzip pandoc pango
-
-# Puis reprendre à l'étape 3 (install.sh fonctionne sur macOS)
 bash scripts/install.sh
 ```
 
 ---
 
-## Installation sur Windows (PowerShell)
+## macOS
 
-```powershell
-# Ouvrir PowerShell en tant qu'Administrateur
+```bash
+# Installer Homebrew si absent
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 1. Autoriser l'exécution de scripts
-Set-ExecutionPolicy Bypass -Scope Process -Force
-
-# 2. Installer les outils
-.\scripts\install.ps1
-
-# 3. Vérifier
-.\scripts\scan.ps1 -Target . -Mode quick
+# Puis lancer le script normalement
+bash scripts/install.sh
 ```
 
 ---
 
-*Installation complète estimée : 5 à 10 minutes sur une connexion standard.*
+## Windows (PowerShell)
+
+```powershell
+# Ouvrir PowerShell en tant qu'Administrateur
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\scripts\install.ps1
+```
+
+---
+
+*Installation complète estimée : 3 à 8 minutes sur une connexion standard.*
