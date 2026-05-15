@@ -314,12 +314,37 @@ python3 scripts/generate-report.py --results-dir $RESULTS_DIR --output ${OUTPUT_
 
 ## 6. Exemple complet — de zéro à rapport
 
-Voici un exemple concret : on scanne une application web `https://app.client.com` de A à Z.
+### Cas 1 — Audit d'un code source (Level 1)
 
-### Situation : premier audit d'un client
+Tu reçois le code source d'une application. Objectif : rapport PDF de sécurité en 2 commandes.
 
 ```bash
-# 0. Se placer dans le projet et activer les outils
+cd /chemin/vers/cyberstrike-devsec
+export PATH="$PATH:$HOME/.local/bin"
+
+# 1. Configurer la cible dans devsec.conf
+echo 'TARGET=./chemin/vers/app' >> devsec.conf
+
+# 2. Scanner + rapport PDF automatique
+./scripts/scan.sh
+
+# Rapport disponible dans :
+# ./security-reports/report.pdf
+```
+
+Avec analyse IA :
+
+```bash
+export GITHUB_COPILOT_TOKEN=$(./scripts/copilot-token.sh)
+./scripts/scan.sh --ai
+# → security-reports/report.pdf contient la section 🤖 Analyse IA
+```
+
+---
+
+### Cas 2 — Audit d'un site web client (Level 2)
+
+```bash
 cd /chemin/vers/cyberstrike-devsec
 export PATH="$PATH:$HOME/.local/bin"
 
@@ -338,8 +363,8 @@ python3 scripts/consent/generate-consent.py \
   --exclusions "base de production, /internal/*" \
   --output reports/client-acme/consent/consent-draft.pdf
 
-# → Envoyer reports/client-acme/consent/consent-draft.pdf au client
-# → Attendre le retour signé → le sauvegarder sous consent-signed.pdf
+# → Envoyer le PDF au client, attendre le retour signé
+# → Sauvegarder sous reports/client-acme/consent/consent-signed.pdf
 
 # 3. Vérifier le document signé
 python3 scripts/consent/verify-consent.py \
@@ -347,17 +372,17 @@ python3 scripts/consent/verify-consent.py \
   --target "https://app.acme.com" \
   --token-out reports/client-acme/consent/token.json
 
-# 4. Lancer le scan
-python3 scripts/devsec-pipeline.py \
-  --target "https://app.acme.com" \
-  --level 2 \
-  --lang auto \
-  --consent "reports/client-acme/consent/consent-signed.pdf" \
-  --output "reports/client-acme/scan-2026-06-10"
+# 4. Configurer devsec.conf
+cat >> devsec.conf << 'EOF'
+TARGET_URL=https://app.acme.com
+CONSENT=./reports/client-acme/consent/consent-signed.pdf
+EOF
 
-# 5. Le rapport PDF est prêt ici :
-# reports/client-acme/scan-2026-06-10/report.pdf
-# → L'envoyer au client !
+# 5. Lancer le scan
+./scripts/scan-web.sh
+
+# Rapport disponible dans :
+# ./security-reports/report.pdf
 ```
 
 ---
