@@ -226,6 +226,103 @@ def load_nikto_results(results_dir: Path) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────
 # DEDUPLICATION
 # ─────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
+# ADDITIONAL TOOL LOADERS (semgrep, gitleaks, grype, trivy, checkov, trufflehog)
+# ─────────────────────────────────────────────────────────────────
+
+SEVERITY_DEFAULT_CVSS = {
+    "Critical": 9.5, "High": 7.5, "Medium": 5.0, "Low": 2.0, "Info": 0.0,
+}
+
+def load_semgrep_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"semgrep.json", results_dir/"raw"/"semgrep-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            data = json.loads(candidate.read_text())
+            sev_map = {"ERROR":"High","WARNING":"Medium","INFO":"Low","error":"High","warning":"Medium","info":"Low"}
+            for r in data.get("results",[]):
+                sev = sev_map.get(r.get("extra",{}).get("severity","WARNING"),"Medium")
+                findings.append({"tool":"semgrep","id":r.get("check_id",""),"name":r.get("check_id","").split(".")[-1].replace("-"," ").title(),"severity":sev,"cvss":SEVERITY_DEFAULT_CVSS.get(sev,5.0),"description":r.get("extra",{}).get("message","")[:200],"url":f"{r.get('path','')}:{r.get('start',{}).get('line','')}","file":r.get("path",""),"line":r.get("start",{}).get("line")})
+        except Exception as e: print(f"  [WARN] semgrep: {e}", file=sys.stderr)
+        break
+    return findings
+
+def load_gitleaks_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"gitleaks.json", results_dir/"raw"/"gitleaks-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            data = json.loads(candidate.read_text())
+            if isinstance(data, list):
+                for s in data:
+                    findings.append({"tool":"gitleaks","id":s.get("RuleID","?"),"name":s.get("Description",s.get("RuleID","Secret")),"severity":"Critical","cvss":9.0,"description":s.get("Description",""),"url":f"{s.get('File','')}:{s.get('StartLine','')}","file":s.get("File",""),"line":s.get("StartLine")})
+        except Exception as e: print(f"  [WARN] gitleaks: {e}", file=sys.stderr)
+        break
+    return findings
+
+def load_grype_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"grype.json", results_dir/"raw"/"grype-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            data = json.loads(candidate.read_text())
+            for match in data.get("matches",[]):
+                vuln = match.get("vulnerability",{}); art = match.get("artifact",{})
+                sev = vuln.get("severity","Unknown").capitalize()
+                if sev not in ("Critical","High","Medium","Low","Info"): sev = "Medium"
+                cvss_list = vuln.get("cvss",[])
+                cvss_score = float(cvss_list[-1].get("metrics",{}).get("baseScore",SEVERITY_DEFAULT_CVSS.get(sev,0))) if cvss_list else SEVERITY_DEFAULT_CVSS.get(sev,0)
+                findings.append({"tool":"grype","id":vuln.get("id",""),"name":f"{vuln.get('id','')} — {art.get('name','')} {art.get('version','')}","severity":sev,"cvss":cvss_score,"description":vuln.get("description","")[:200],"url":art.get("name",""),"package":art.get("name",""),"version":art.get("version",""),"fix":", ".join(vuln.get("fix",{}).get("versions",[])) or "no fix"})
+        except Exception as e: print(f"  [WARN] grype: {e}", file=sys.stderr)
+        break
+    return findings
+
+def load_trivy_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"trivy.json", results_dir/"raw"/"trivy-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            data = json.loads(candidate.read_text())
+            for result in data.get("Results",[]):
+                for vuln in result.get("Vulnerabilities",[]):
+                    sev = vuln.get("Severity","UNKNOWN").capitalize()
+                    if sev not in ("Critical","High","Medium","Low","Info"): sev = "Medium"
+                    findings.append({"tool":"trivy","id":vuln.get("VulnerabilityID",""),"name":f"{vuln.get('VulnerabilityID','')} — {vuln.get('PkgName','')}","severity":sev,"cvss":float(vuln.get("CVSS",{}).get("nvd",{}).get("V3Score",SEVERITY_DEFAULT_CVSS.get(sev,0))),"description":vuln.get("Description","")[:200],"url":vuln.get("PkgName",""),"package":vuln.get("PkgName",""),"fix":vuln.get("FixedVersion","no fix")})
+        except Exception as e: print(f"  [WARN] trivy: {e}", file=sys.stderr)
+        break
+    return findings
+
+def load_checkov_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"checkov.json", results_dir/"raw"/"checkov-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            data = json.loads(candidate.read_text())
+            if isinstance(data, dict): data = [data]
+            for d in data:
+                for check in d.get("results",{}).get("failed_checks",[]):
+                    findings.append({"tool":"checkov","id":check.get("check_id",""),"name":check.get("check_name",""),"severity":"Medium","cvss":5.0,"description":check.get("check_name",""),"url":check.get("file_path",""),"file":check.get("file_path","")})
+        except Exception as e: print(f"  [WARN] checkov: {e}", file=sys.stderr)
+        break
+    return findings
+
+def load_trufflehog_results(results_dir):
+    findings = []
+    for candidate in [results_dir/"trufflehog.json", results_dir/"raw"/"trufflehog-results.json"]:
+        if not candidate.exists(): continue
+        try:
+            for line in candidate.read_text().splitlines():
+                line = line.strip()
+                if not line: continue
+                item = json.loads(line)
+                det = item.get("DetectorName","?"); src_meta = item.get("SourceMetadata",{}).get("Data",{})
+                loc = next(iter(src_meta.values()),{}) if src_meta else {}
+                findings.append({"tool":"trufflehog","id":det,"name":f"Secret: {det}","severity":"Critical","cvss":9.0,"description":f"Potential secret ({det})","url":loc.get("file",loc.get("link",""))})
+        except Exception as e: print(f"  [WARN] trufflehog: {e}", file=sys.stderr)
+        break
+    return findings
+
 
 def deduplicate_findings(findings: list[dict]) -> list[dict]:
     """Remove duplicate findings based on tool + name + URL."""
@@ -377,7 +474,21 @@ def generate_report(
     nikto_findings = load_nikto_results(results_dir)
     print(f"    nikto: {len(nikto_findings)} findings loaded")
 
-    all_findings = nuclei_findings + testssl_findings + nikto_findings
+    semgrep_findings = load_semgrep_results(results_dir)
+    print(f"    semgrep: {len(semgrep_findings)} findings loaded")
+    gitleaks_findings = load_gitleaks_results(results_dir)
+    print(f"    gitleaks: {len(gitleaks_findings)} findings loaded")
+    grype_findings = load_grype_results(results_dir)
+    print(f"    grype: {len(grype_findings)} findings loaded")
+    trivy_findings = load_trivy_results(results_dir)
+    print(f"    trivy: {len(trivy_findings)} findings loaded")
+    checkov_findings = load_checkov_results(results_dir)
+    print(f"    checkov: {len(checkov_findings)} findings loaded")
+    trufflehog_findings = load_trufflehog_results(results_dir)
+    print(f"    trufflehog: {len(trufflehog_findings)} findings loaded")
+    all_findings = (nuclei_findings + testssl_findings + nikto_findings
+        + semgrep_findings + gitleaks_findings + grype_findings
+        + trivy_findings + checkov_findings + trufflehog_findings)
 
     # ── Deduplicate & score ───────────────────────────────────────
     print("[*] Deduplicating findings...")
@@ -423,25 +534,75 @@ def generate_report(
     print("[*] Filling report template...")
     report_content = fill_template(template_content, replacements)
 
-    # Append auto-generated sections
-    report_content += "\n\n---\n\n## Auto-Generated Findings\n\n"
-    report_content += "*Generated by generate-report.py — review and edit before delivery.*\n\n"
+    # ── Build report sections ────────────────────────────────────────────────────
+    def row(f):
+        return {"tool": f.get("tool",""), "id": f.get("id",""), "url": f.get("url",""), "description": f.get("description",""), "severity": f.get("severity",""), "cvss": f.get("cvss",0), "fix": f.get("fix","?"), "package": f.get("package", f.get("url",""))}
 
-    if port_findings:
-        report_content += "### Ports & Services (Auto-Generated)\n\n"
-        report_content += build_ports_table(port_findings)
-        report_content += "\n\n"
-
-    if all_findings:
-        report_content += "### All Findings Summary (Auto-Generated)\n\n"
-        report_content += build_findings_table(all_findings)
-        report_content += "\n\n"
-
-    report_content += "### Severity Distribution (Auto-Generated)\n\n"
+    report_content += "\n\n---\n\n## Resultats des scans\n\n"
+    report_content += "*Genere automatiquement - a valider avant livraison au client.*\n\n"
+    report_content += "### Distribution des severites\n\n"
     report_content += render_stats_ascii(stats)
     report_content += "\n\n"
 
-    # ── Write markdown output ─────────────────────────────────────
+    if port_findings:
+        n = len(port_findings)
+        report_content += "### Ports & Services ouverts (" + str(n) + " trouves)\n\n"
+        report_content += build_ports_table(port_findings)
+        report_content += "\n\n"
+
+    secret_findings = [f for f in all_findings if f.get("tool") in ("gitleaks","trufflehog")]
+    if secret_findings:
+        n = len(secret_findings)
+        report_content += "### 🔴 Secrets exposes (" + str(n) + " findings)\n\n"
+        report_content += "| # | Outil | Regle | Fichier:Ligne | Description |\n"
+        report_content += "|---|-------|-------|---------------|-------------|\n"
+        for i, f in enumerate(secret_findings, 1):
+            r = row(f)
+            report_content += "| " + str(i) + " | " + r["tool"] + " | `" + r["id"] + "` | `" + r["url"][:60] + "` | " + r["description"][:80] + " |\n"
+        report_content += "\n"
+
+    cve_findings = [f for f in all_findings if f.get("tool") in ("grype","trivy")]
+    if cve_findings:
+        n = len(cve_findings)
+        report_content += "### 🟠 CVE / Dependances vulnerables (" + str(n) + " findings)\n\n"
+        report_content += "| # | Outil | CVE | Package | Fix | Severite |\n"
+        report_content += "|---|-------|-----|---------|-----|----------|\n"
+        for i, f in enumerate(sorted(cve_findings, key=lambda x: x.get("cvss", 0), reverse=True), 1):
+            r = row(f)
+            report_content += "| " + str(i) + " | " + r["tool"] + " | `" + r["id"] + "` | `" + r["package"][:40] + "` | " + r["fix"] + " | " + severity_emoji(r["severity"]) + " " + r["severity"] + " |\n"
+        report_content += "\n"
+
+    sast_findings = [f for f in all_findings if f.get("tool") == "semgrep"]
+    if sast_findings:
+        n = len(sast_findings)
+        report_content += "### 🟡 Vulnerabilites code - SAST (" + str(n) + " findings)\n\n"
+        report_content += "| # | Regle | Fichier:Ligne | Severite | Description |\n"
+        report_content += "|---|-------|---------------|----------|-------------|\n"
+        for i, f in enumerate(sorted(sast_findings, key=lambda x: x.get("cvss", 0), reverse=True), 1):
+            r = row(f)
+            rule = r["id"].split(".")[-1][:40]
+            report_content += "| " + str(i) + " | `" + rule + "` | `" + r["url"][:60] + "` | " + severity_emoji(r["severity"]) + " " + r["severity"] + " | " + r["description"][:100] + " |\n"
+        report_content += "\n"
+
+    iac_findings = [f for f in all_findings if f.get("tool") == "checkov"]
+    if iac_findings:
+        n = len(iac_findings)
+        report_content += "### 🔵 IaC / Configuration (" + str(n) + " findings)\n\n"
+        report_content += "| # | Check ID | Fichier | Description |\n"
+        report_content += "|---|----------|---------|-------------|\n"
+        for i, f in enumerate(iac_findings, 1):
+            r = row(f)
+            report_content += "| " + str(i) + " | `" + r["id"] + "` | `" + r["url"][:60] + "` | " + r["description"][:80] + " |\n"
+        report_content += "\n"
+
+    web_findings = [f for f in all_findings if f.get("tool") in ("nuclei","nikto","testssl")]
+    if web_findings:
+        n = len(web_findings)
+        report_content += "### 🟡 Vulnerabilites Web (" + str(n) + " findings)\n\n"
+        report_content += build_findings_table(web_findings)
+        report_content += "\n\n"
+
+        # ── Write markdown output ─────────────────────────────────────
     output_path.parent.mkdir(parents=True, exist_ok=True)
     md_path = output_path.with_suffix(".md") if output_format != "md" else output_path
 
@@ -456,41 +617,55 @@ def generate_report(
     print(f"\n[+] Done. Report: {output_path}")
 
 
-def _convert_with_pandoc(md_path: Path, output_path: Path, fmt: str) -> None:
-    """Convert Markdown to PDF or HTML using pandoc."""
-    try:
-        result = subprocess.run(
-            ["pandoc", "--version"],
-            capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            raise FileNotFoundError("pandoc not found")
-    except FileNotFoundError:
-        print("[WARN] pandoc not found. Install pandoc to enable PDF/HTML output.")
-        print(f"[WARN] Markdown report is available at: {md_path}")
+def _convert_with_pandoc(md_path, output_path, fmt):
+    if fmt == "html":
+        _pandoc_html(md_path, output_path)
         return
-
-    cmd = ["pandoc", str(md_path), "-o", str(output_path)]
-
     if fmt == "pdf":
-        cmd += [
-            "--pdf-engine=xelatex",
-            "--variable", "geometry:margin=2cm",
-            "--variable", "fontsize=11pt",
-            "--variable", "mainfont=DejaVu Serif",
-            "--toc",
-        ]
-    elif fmt == "html":
-        cmd += ["--standalone", "--toc", "--self-contained"]
+        if _weasyprint_available():
+            html_path = md_path.with_suffix(".html")
+            _pandoc_html(md_path, html_path)
+            _weasyprint_pdf(html_path, output_path)
+        else:
+            _pandoc_pdf_latex(md_path, output_path)
 
-    print(f"[*] Converting to {fmt.upper()} via pandoc...")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+def _weasyprint_available():
+    try:
+        r = subprocess.run(["weasyprint","--version"], capture_output=True, text=True)
+        return r.returncode == 0
+    except FileNotFoundError:
+        return False
 
-    if result.returncode == 0:
-        print(f"[+] {fmt.upper()} report written: {output_path}")
-    else:
-        print(f"[ERROR] pandoc conversion failed:\n{result.stderr}", file=sys.stderr)
-        print(f"[WARN] Markdown report is still available at: {md_path}")
+def _pandoc_html(md_path, output_path):
+    css = "body{font-family:Arial,sans-serif;max-width:960px;margin:2em auto;padding:0 2em;color:#1a1a2e;line-height:1.6}h1{color:#e94560;border-bottom:3px solid #e94560;padding-bottom:.3em}h2{color:#0f3460;border-bottom:1px solid #0f3460;margin-top:2em}table{border-collapse:collapse;width:100%;margin:1em 0}th{background:#0f3460;color:#fff;padding:.5em 1em;text-align:left}td{border:1px solid #ccc;padding:.5em 1em}tr:nth-child(even){background:#f5f7fa}code,pre{background:#f0f0f0;border-radius:4px;font-family:monospace;font-size:.9em}pre{padding:1em;overflow-x:auto}"
+    css_path = md_path.parent / "_style.css"
+    css_path.write_text(css)
+    try:
+        r = subprocess.run(["pandoc", str(md_path), "-o", str(output_path), "--standalone","--toc","--self-contained","--css",str(css_path),"--metadata","title=CyberStrikeAI DevSec Report"], capture_output=True, text=True)
+        css_path.unlink(missing_ok=True)
+        if r.returncode == 0: print(f"[+] HTML report written: {output_path}")
+        else: print(f"[ERROR] pandoc HTML: {r.stderr}", file=sys.stderr)
+    except FileNotFoundError:
+        css_path.unlink(missing_ok=True)
+        print("[WARN] pandoc not found")
+
+def _weasyprint_pdf(html_path, output_path):
+    print("[*] Generating PDF via weasyprint...")
+    try:
+        r = subprocess.run(["weasyprint", str(html_path), str(output_path)], capture_output=True, text=True)
+        if r.returncode == 0: print(f"[+] PDF report written: {output_path}")
+        else: print(f"[ERROR] weasyprint: {r.stderr}", file=sys.stderr)
+    except FileNotFoundError:
+        print("[WARN] weasyprint not found")
+
+def _pandoc_pdf_latex(md_path, output_path):
+    print("[*] PDF via pandoc+xelatex (fallback)...")
+    try:
+        r = subprocess.run(["pandoc", str(md_path), "-o", str(output_path), "--pdf-engine=xelatex","--variable","geometry:margin=2cm","--toc"], capture_output=True, text=True)
+        if r.returncode == 0: print(f"[+] PDF written: {output_path}")
+        else: print(f"[ERROR] xelatex: {r.stderr}", file=sys.stderr)
+    except FileNotFoundError:
+        print("[WARN] pandoc not found")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -533,7 +708,7 @@ Examples:
     )
     parser.add_argument(
         "--format", choices=["md", "pdf", "html"], default="md",
-        help="Output format: md (Markdown), pdf (requires pandoc+xelatex), html (requires pandoc)"
+        help="Output format: md (Markdown), pdf (weasyprint via HTML, fallback xelatex), html (pandoc)"
     )
     return parser.parse_args()
 

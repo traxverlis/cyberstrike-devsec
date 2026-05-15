@@ -1,5 +1,9 @@
 # Installation & Configuration Guide — CyberStrikeAI DevSec
 
+> ⚠️ **Ce fichier est l'ancienne documentation d'installation (v1).**
+> Pour l'installation complète et à jour, consulter **[INSTALL.md](../INSTALL.md)** à la racine du projet.
+> Ce fichier est conservé pour référence historique.
+
 ---
 
 ## Table of Contents

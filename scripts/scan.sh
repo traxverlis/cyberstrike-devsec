@@ -12,6 +12,8 @@
 #   --mode    <mode>    Scan mode: quick | full | cicd (default: full)
 #   --severity <level>  Minimum severity: critical | high | medium | low (default: high)
 #   --no-git            Skip git history scanning (faster for large repos)
+#   --ai                Enable AI-powered analysis via GitHub Copilot (requires config.yaml)
+#   --ai-config <path>  Path to config.yaml for AI provider (default: ./config.yaml)
 #   --help              Show this help
 #
 # Exit codes:
@@ -36,6 +38,8 @@ OUTPUT="./security-reports"
 MODE="full"
 SEVERITY="high"
 NO_GIT=false
+AI_MODE=false
+AI_CONFIG=""
 SCAN_START=$(date +%s)
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
@@ -46,6 +50,8 @@ while [[ $# -gt 0 ]]; do
     --mode)     MODE="$2"; shift 2 ;;
     --severity) SEVERITY="$2"; shift 2 ;;
     --no-git)   NO_GIT=true; shift ;;
+    --ai)       AI_MODE=true; shift ;;
+    --ai-config) AI_CONFIG="$2"; shift 2 ;;
     --help|-h)
       sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -415,6 +421,65 @@ EOF
   else
     echo -e "${GREEN}${BOLD}✅ SECURITY GATE: PASS${RESET}"
     exit 0
+  fi
+fi
+
+# ── PDF Report Generation ────────────────────────────────────────────────────
+REPORT_SCRIPT="$(dirname "$0")/generate-report.py"
+AI_SCRIPT="$(dirname "$0")/ai_analyzer.py"
+if command -v python3 > /dev/null 2>&1 && [[ -f "$REPORT_SCRIPT" ]]; then
+  PDF_OUT="$OUTPUT/report.pdf"
+  MD_OUT="$OUTPUT/report.md"
+  HTML_OUT="$OUTPUT/report.html"
+  log "Generating reports (MD + HTML + PDF)..."
+  python3 "$REPORT_SCRIPT" --results-dir "$OUTPUT" --output "$MD_OUT"   --level 1 --format md   2>/dev/null
+  python3 "$REPORT_SCRIPT" --results-dir "$OUTPUT" --output "$HTML_OUT" --level 1 --format html 2>/dev/null
+  python3 "$REPORT_SCRIPT" --results-dir "$OUTPUT" --output "$PDF_OUT"  --level 1 --format pdf  2>/dev/null
+  [[ -f "$PDF_OUT"  ]] && success "PDF  report → $PDF_OUT"
+  [[ -f "$HTML_OUT" ]] && success "HTML report → $HTML_OUT"
+  [[ -f "$MD_OUT"   ]] && success "MD   report → $MD_OUT"
+
+  # ── Analyse IA (mode --ai uniquement) ──────────────────────────────
+  if [[ "$AI_MODE" == "true" ]] && command -v python3 > /dev/null 2>&1 && [[ -f "$AI_SCRIPT" ]]; then
+    log "Analyse IA en cours (GitHub Copilot)..."
+    AI_OUT="$OUTPUT/ai_analysis.md"
+    AI_SUMMARY="$OUTPUT/summary_for_ai.json"
+
+    # Construire un summary JSON minimal pour l'analyseur IA
+    python3 - << PYEOF
+import json, os
+findings = []
+for fname in ['gitleaks.json', 'grype.json', 'semgrep.json', 'trivy.json']:
+    fpath = os.path.join('$OUTPUT', fname)
+    if not os.path.exists(fpath): continue
+    try:
+        data = json.load(open(fpath))
+        if fname == 'gitleaks.json' and isinstance(data, list):
+            for s in data: findings.append({'tool':'gitleaks-secrets','id':s.get('RuleID','?'),'severity':'critical','description':s.get('Description',''),'file':s.get('File',''),'line':s.get('StartLine')})
+        elif fname == 'grype.json' and isinstance(data, dict):
+            for m in data.get('matches',[]): v=m.get('vulnerability',{}); findings.append({'tool':'grype-cve','id':v.get('id',''),'severity':v.get('severity','?').lower(),'description':v.get('description',''),'package':m.get('artifact',{}).get('name','')})
+        elif fname == 'semgrep.json' and isinstance(data, dict):
+            for r in data.get('results',[]): findings.append({'tool':'semgrep-sast','id':r.get('check_id',''),'severity':r.get('extra',{}).get('severity','?').lower(),'description':r.get('extra',{}).get('message',''),'file':r.get('path',''),'line':r.get('start',{}).get('line')})
+    except: pass
+
+out = {'target': '$TARGET', 'level': 1, 'findings': findings, 'total_findings': len(findings)}
+json.dump(out, open('$AI_SUMMARY', 'w'), indent=2)
+print(f'[AI] {len(findings)} findings transmis à l\'analyseur IA')
+PYEOF
+
+    AI_CONFIG_ARG=""
+    [[ -n "$AI_CONFIG" ]] && AI_CONFIG_ARG="--config $AI_CONFIG"
+    python3 "$AI_SCRIPT" --findings "$AI_SUMMARY" $AI_CONFIG_ARG --output "$AI_OUT" --level 1 --verbose
+
+    if [[ -f "$AI_OUT" ]]; then
+      success "🤖 Analyse IA → $AI_OUT"
+      # Injecter la section IA dans le rapport MD puis regénérer PDF
+      cat "$AI_OUT" >> "$MD_OUT"
+      python3 "$REPORT_SCRIPT" --results-dir "$OUTPUT" --output "$PDF_OUT" --level 1 --format pdf 2>/dev/null
+      [[ -f "$PDF_OUT" ]] && success "🤖 PDF final (avec analyse IA) → $PDF_OUT"
+    fi
+  elif [[ "$AI_MODE" == "false" ]]; then
+    info "Mode sans IA — utilisez --ai pour activer l'analyse GitHub Copilot"
   fi
 fi
 

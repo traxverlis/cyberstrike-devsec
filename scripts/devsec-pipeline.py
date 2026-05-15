@@ -92,6 +92,8 @@ Examples:
     )
     parser.add_argument("--consent", default=None, help="Path to signed consent PDF (required for level 2+)")
     parser.add_argument("--ai-model", default="claude-sonnet-4-5", help="AI model for analysis (default: claude-sonnet-4-5)")
+    parser.add_argument("--ai", action="store_true", help="Enable AI-powered analysis (requires config.yaml or GITHUB_COPILOT_TOKEN env var)")
+    parser.add_argument("--ai-config", default=None, type=Path, help="Path to config.yaml for AI provider (auto-detected if absent)")
     parser.add_argument("--notify-email", default=None, help="Email address for report notification")
     parser.add_argument("--operator", default=os.getenv("USER", "unknown"), help="Operator name for audit trail")
     parser.add_argument("--dry-run", action="store_true", help="Parse and validate without running scans")
@@ -120,7 +122,7 @@ def verify_consent(consent_path: str | None, level: int) -> tuple[bool, str]:
         return True, consent_id
 
     result = subprocess.run(
-        [sys.executable, str(verify_script), "--consent", consent_path, "--level", str(level)],
+        [sys.executable, str(verify_script), "--consent", consent_path],
         capture_output=True,
         text=True,
     )
@@ -408,6 +410,7 @@ def generate_report(
     score: int,
     grade: str,
     consent_id: str,
+    ai_section: str = "",
 ) -> Path:
     """Call generate-report.py or write basic JSON summary."""
     report_script = Path(__file__).parent / "generate-report.py"
@@ -433,17 +436,74 @@ def generate_report(
     summary_path.write_text(json.dumps(summary_data, indent=2))
 
     if report_script.exists():
+        raw_dir = output_dir / "raw"
+        html_path = output_dir / "report.html"
+        pdf_path  = output_dir / "report.pdf"
+        md_path   = output_dir / "report.md"
+
+        # Step 1 — Markdown
         subprocess.run(
             [
-                sys.executable,
-                str(report_script),
-                "--summary", str(summary_path),
-                "--output", str(output_dir / "report.html"),
+                sys.executable, str(report_script),
+                "--results-dir", str(raw_dir if raw_dir.exists() else output_dir),
+                "--output", str(md_path),
                 "--level", str(args.level),
+                "--format", "md",
             ],
             check=False,
         )
-        console.log("[green]✅ HTML report generated[/green]")
+
+        # Step 2 — HTML
+        subprocess.run(
+            [
+                sys.executable, str(report_script),
+                "--results-dir", str(raw_dir if raw_dir.exists() else output_dir),
+                "--output", str(html_path),
+                "--level", str(args.level),
+                "--format", "html",
+            ],
+            check=False,
+        )
+
+        # Step 3 — PDF (weasyprint via HTML intermediate)
+        subprocess.run(
+            [
+                sys.executable, str(report_script),
+                "--results-dir", str(raw_dir if raw_dir.exists() else output_dir),
+                "--output", str(pdf_path),
+                "--level", str(args.level),
+                "--format", "pdf",
+            ],
+            check=False,
+        )
+
+        if pdf_path.exists():
+            console.log(f"[green]✅ PDF report generated → {pdf_path}[/green]")
+        if html_path.exists():
+            console.log(f"[green]✅ HTML report generated → {html_path}[/green]")
+        if md_path.exists():
+            console.log(f"[green]✅ Markdown report generated → {md_path}[/green]")
+
+        # Injecter la section IA dans le rapport Markdown, puis regénérer PDF
+        if ai_section and md_path.exists():
+            md_content = md_path.read_text()
+            md_path.write_text(md_content + "\n" + ai_section)
+            console.log("[magenta]🤖 Section IA injectée dans le rapport[/magenta]")
+            # Regénérer PDF avec la section IA
+            subprocess.run(
+                [
+                    sys.executable, str(report_script),
+                    "--results-dir", str(raw_dir if raw_dir.exists() else output_dir),
+                    "--output", str(pdf_path),
+                    "--level", str(args.level),
+                    "--format", "pdf",
+                ],
+                check=False,
+            )
+            console.log(f"[green]✅ PDF final (avec analyse IA) → {pdf_path}[/green]")
+
+        # Return PDF as primary deliverable (fallback to summary.json)
+        return pdf_path if pdf_path.exists() else summary_path
     else:
         console.log(f"[dim]ℹ  generate-report.py not found — JSON summary written to {summary_path}[/dim]")
 
@@ -600,10 +660,40 @@ async def main() -> int:
 
     scan_results_list = list(scan_results)
 
+    # ── Analyse IA (optionnelle) ──────────────────────────────────────────────
+    ai_section = ""
+    if getattr(args, 'ai', False):
+        console.rule("[bold magenta]🤖 AI Analysis[/bold magenta]")
+        try:
+            ai_script = Path(__file__).parent / "ai_analyzer.py"
+            if ai_script.exists():
+                sys.path.insert(0, str(Path(__file__).parent))
+                import ai_analyzer
+                cfg = ai_analyzer.load_config(getattr(args, 'ai_config', None))
+                cfg["model"] = args.ai_model
+                console.log(f"[magenta]🤖 Modèle : {cfg['model']} | Provider : {cfg['base_url']}[/magenta]")
+                ai_result = ai_analyzer.analyze(
+                    findings=all_findings,
+                    target=args.target,
+                    level=args.level,
+                    cfg=cfg,
+                    verbose=True,
+                )
+                ai_section = ai_analyzer.format_ai_section(ai_result)
+                ai_out = output_dir / "ai_analysis.md"
+                ai_out.write_text(ai_section)
+                console.log(f"[green]✅ Analyse IA → {ai_out}[/green]")
+            else:
+                console.log("[yellow]⚠️  ai_analyzer.py introuvable[/yellow]")
+        except Exception as exc:
+            console.log(f"[red]❌ Analyse IA échouée : {exc}[/red]")
+    else:
+        console.log("[dim]ℹ  Mode sans IA — ajoutez --ai pour activer l'analyse GitHub Copilot[/dim]")
+
     # ── Generate report ───────────────────────────────────────────────────────
     console.rule("[cyan]Report Generation[/cyan]")
     score, grade = calculate_score(all_findings)
-    report_path = generate_report(args, output_dir, scan_results_list, all_findings, score, grade, consent_id)
+    report_path = generate_report(args, output_dir, scan_results_list, all_findings, score, grade, consent_id, ai_section=ai_section)
 
     # ── Send notification ─────────────────────────────────────────────────────
     if args.notify_email:
