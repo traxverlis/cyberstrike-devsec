@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
     --docker)  DOCKER_MODE=true; shift ;;
     --ai)      AI_MODE=true; shift ;;
     --help|-h)
-      echo "Usage: ./scripts/scan-web.sh [--target URL] [--consent PDF] [--output DIR] [--ai]"
+      echo "Usage: ./scripts/scan-web.sh [--target URL] [--consent PDF] [--output DIR] [--ai] [--docker]"
       echo "Config par défaut dans devsec.conf"
       exit 0 ;;
     *) echo "Option inconnue: $1"; exit 1 ;;

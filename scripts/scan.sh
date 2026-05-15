@@ -289,16 +289,20 @@ update_progress "CVE scan"
 # ── Quick mode: stop here ─────────────────────────────────────────────────────
 if [[ "$MODE" == "quick" ]]; then
   echo ""
-  echo -e "${BOLD}━━━ Quick Mode Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo ""
   TOTAL_BLOCKERS=$(( SECRETS + CRITICAL ))
   if [[ "$TOTAL_BLOCKERS" -gt 0 ]]; then
     error "BLOCKERS FOUND: Secrets=$SECRETS | Critical CVEs=$CRITICAL"
-    exit 1
   else
     success "No blockers found (quick scan)"
-    exit 0
   fi
+  # Générer le rapport PDF même en mode quick
+  REPORT_SCRIPT="$(dirname "$0")/generate-report.py"
+  if command -v python3 > /dev/null 2>&1 && [[ -f "$REPORT_SCRIPT" ]]; then
+    log "Génération du rapport PDF (quick)..."
+    python3 "$REPORT_SCRIPT" --results-dir "$OUTPUT" --output "$OUTPUT/report.pdf" --level 1 --format pdf 2>/dev/null
+    [[ -f "$OUTPUT/report.pdf" ]] && success "PDF → $OUTPUT/report.pdf"
+  fi
+  [[ "$TOTAL_BLOCKERS" -gt 0 ]] && exit 1 || exit 0
 fi
 
 # ── Scan 3: OWASP SAST (full + cicd) ─────────────────────────────────────────

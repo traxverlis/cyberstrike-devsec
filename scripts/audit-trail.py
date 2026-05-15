@@ -40,7 +40,7 @@ def make_entry(
     prev_hash: str = "",
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "action": action,
         "target": target,
         "tool": tool,
@@ -238,7 +238,7 @@ def cmd_export_pdf(args: argparse.Namespace) -> int:
 <body>
   <h1>🔒 CyberStrikeAI DevSec — Audit Trail</h1>
   <p><strong>Date:</strong> {(log_date or date.today()).isoformat()} &nbsp;
-     <strong>Generated:</strong> {datetime.utcnow().isoformat()[:19]}Z &nbsp;
+     <strong>Generated:</strong> {datetime.now(timezone.utc).isoformat()[:19]}Z &nbsp;
      <strong>Entries:</strong> {len(entries)}</p>
   <table>
     <thead>

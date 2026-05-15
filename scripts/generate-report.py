@@ -80,7 +80,7 @@ def load_nmap_results(results_dir: Path) -> list[dict]:
     findings = []
 
     # Try nmap JSON (nmap -oJ)
-    for fname in ["nmap.json", "nmap_results.json"]:
+    for fname in ["nmap.json", "nmap_results.json", "nmap-results.json"]:
         fpath = results_dir / fname
         if fpath.exists():
             data = load_json_file(fpath)
@@ -110,7 +110,7 @@ def load_nmap_results(results_dir: Path) -> list[dict]:
             return findings
 
     # Fallback: try .txt summary
-    for fname in ["nmap.txt", "nmap_results.txt"]:
+    for fname in ["nmap.txt", "nmap_results.txt", "nmap-results.xml"]:
         fpath = results_dir / fname
         if fpath.exists():
             try:
@@ -198,9 +198,9 @@ def load_testssl_results(results_dir: Path) -> list[dict]:
 
 
 def load_nikto_results(results_dir: Path) -> list[dict]:
-    """Parse nikto JSON output."""
+    """Parse nikto JSON ou texte output."""
     findings = []
-    for fname in ["nikto.json", "nikto_results.json"]:
+    for fname in ["nikto.json", "nikto_results.json", "nikto-results.json"]:
         fpath = results_dir / fname
         if fpath.exists():
             data = load_json_file(fpath)
@@ -215,11 +215,35 @@ def load_nikto_results(results_dir: Path) -> list[dict]:
                         "name": vuln.get("msg", ""),
                         "url": vuln.get("url", ""),
                         "method": vuln.get("method", "GET"),
-                        "severity": "Medium",  # nikto doesn't always provide severity
+                        "severity": "Medium",
                         "cvss": 0.0,
                         "description": vuln.get("msg", ""),
                     })
-            break
+                return findings
+    # Fallback : parser nikto texte brut
+    for fname in ["nikto-results.txt", "nikto.txt", "nikto_results.txt"]:
+        fpath = results_dir / fname
+        if fpath.exists():
+            try:
+                import re as _re
+                for line in fpath.read_text(errors="replace").splitlines():
+                    line = line.strip()
+                    if line.startswith("+ ") and len(line) > 5:
+                        msg = line[2:].strip()
+                        findings.append({
+                            "tool": "nikto",
+                            "id": "nikto-finding",
+                            "name": msg[:80],
+                            "url": "",
+                            "method": "GET",
+                            "severity": "Medium",
+                            "cvss": 5.0,
+                            "description": msg,
+                        })
+            except Exception as e:
+                print(f"  [WARN] nikto txt parse: {e}", file=sys.stderr)
+            if findings:
+                return findings
     return findings
 
 
@@ -234,9 +258,29 @@ SEVERITY_DEFAULT_CVSS = {
     "Critical": 9.5, "High": 7.5, "Medium": 5.0, "Low": 2.0, "Info": 0.0,
 }
 
+
+def find_results_file(results_dir: Path, *names) -> Optional[Path]:
+    """Cherche un fichier de résultats dans results_dir et ses sous-répertoires phase*."""
+    for name in names:
+        # Chercher d'abord à la racine
+        for candidate in [results_dir / name, results_dir / "raw" / name]:
+            if candidate.exists():
+                return candidate
+        # Chercher dans les sous-répertoires phase*/
+        for phase_dir in sorted(results_dir.glob("phase*")):
+            candidate = phase_dir / name
+            if candidate.exists():
+                return candidate
+        # Chercher dans raw/phase*/
+        for phase_dir in sorted((results_dir / "raw").glob("phase*") if (results_dir / "raw").exists() else []):
+            candidate = phase_dir / name
+            if candidate.exists():
+                return candidate
+    return None
+
 def load_semgrep_results(results_dir):
     findings = []
-    for candidate in [results_dir/"semgrep.json", results_dir/"raw"/"semgrep-results.json"]:
+    for candidate in [results_dir/"semgrep.json", results_dir/"semgrep-results.json", results_dir/"raw"/"semgrep-results.json"]:
         if not candidate.exists(): continue
         try:
             data = json.loads(candidate.read_text())
@@ -250,7 +294,7 @@ def load_semgrep_results(results_dir):
 
 def load_gitleaks_results(results_dir):
     findings = []
-    for candidate in [results_dir/"gitleaks.json", results_dir/"raw"/"gitleaks-results.json"]:
+    for candidate in [results_dir/"gitleaks.json", results_dir/"gitleaks-results.json", results_dir/"raw"/"gitleaks-results.json"]:
         if not candidate.exists(): continue
         try:
             data = json.loads(candidate.read_text())
@@ -263,7 +307,7 @@ def load_gitleaks_results(results_dir):
 
 def load_grype_results(results_dir):
     findings = []
-    for candidate in [results_dir/"grype.json", results_dir/"raw"/"grype-results.json"]:
+    for candidate in [results_dir/"grype.json", results_dir/"grype-results.json", results_dir/"raw"/"grype-results.json"]:
         if not candidate.exists(): continue
         try:
             data = json.loads(candidate.read_text())
@@ -280,7 +324,7 @@ def load_grype_results(results_dir):
 
 def load_trivy_results(results_dir):
     findings = []
-    for candidate in [results_dir/"trivy.json", results_dir/"raw"/"trivy-results.json"]:
+    for candidate in [results_dir/"trivy.json", results_dir/"trivy-results.json", results_dir/"raw"/"trivy-results.json"]:
         if not candidate.exists(): continue
         try:
             data = json.loads(candidate.read_text())
@@ -295,7 +339,7 @@ def load_trivy_results(results_dir):
 
 def load_checkov_results(results_dir):
     findings = []
-    for candidate in [results_dir/"checkov.json", results_dir/"raw"/"checkov-results.json"]:
+    for candidate in [results_dir/"checkov.json", results_dir/"checkov-results.json", results_dir/"raw"/"checkov-results.json"]:
         if not candidate.exists(): continue
         try:
             data = json.loads(candidate.read_text())
@@ -309,7 +353,7 @@ def load_checkov_results(results_dir):
 
 def load_trufflehog_results(results_dir):
     findings = []
-    for candidate in [results_dir/"trufflehog.json", results_dir/"raw"/"trufflehog-results.json"]:
+    for candidate in [results_dir/"trufflehog.json", results_dir/"trufflehog-results.json", results_dir/"raw"/"trufflehog-results.json"]:
         if not candidate.exists(): continue
         try:
             for line in candidate.read_text().splitlines():
@@ -504,7 +548,7 @@ def generate_report(
     # ── Resolve template ──────────────────────────────────────────
     if template_path is None:
         default_templates = {
-            1: "reports/templates/level1-osint-report.md",
+            1: "reports/templates/level1-static-report.md",
             2: "reports/templates/level2-active-scan-report.md",
             3: "reports/templates/level3-pentest-report.md",
         }

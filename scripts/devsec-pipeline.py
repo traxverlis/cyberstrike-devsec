@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -394,7 +394,7 @@ def generate_report(
     """Call generate-report.py or write basic JSON summary."""
     report_script = Path(__file__).parent / "generate-report.py"
     summary_data = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
         "target": args.target,
         "level": args.level,
         "operator": args.operator,
