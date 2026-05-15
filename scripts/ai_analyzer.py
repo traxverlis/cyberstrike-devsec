@@ -25,6 +25,21 @@ import urllib.error
 from pathlib import Path
 from typing import Optional
 
+# ── PromptLoader dynamique (Option C) ────────────────────────────────────────
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from prompt_loader import PromptLoader
+    _PROJECT_ROOT = Path(__file__).parent.parent
+    _PROMPT_LOADER = PromptLoader(
+        agents_dir=_PROJECT_ROOT / "agents",
+        skills_dir=_PROJECT_ROOT / "skills",
+        roles_dir=_PROJECT_ROOT / "roles",
+    )
+    _PROMPT_LOADER_AVAILABLE = True
+except ImportError:
+    _PROMPT_LOADER_AVAILABLE = False
+    _PROMPT_LOADER = None  # type: ignore
+
 
 # ── Chargement de la config ───────────────────────────────────────────────────
 
@@ -140,8 +155,24 @@ Règles :
 - Format : Markdown structuré"""
 
 
+def _get_system_prompt(level: int = 1) -> str:
+    """Retourne le prompt système : depuis PromptLoader si dispo, sinon fallback."""
+    if _PROMPT_LOADER_AVAILABLE and _PROMPT_LOADER is not None:
+        try:
+            return _PROMPT_LOADER.build_system_prompt(level)
+        except Exception:
+            pass
+    return SYSTEM_SECURITY_ANALYST
+
+
 def build_triage_prompt(findings: list[dict], target: str, level: int) -> str:
-    """Construit le prompt de triage des findings."""
+    """Construit le prompt de triage — délègue à PromptLoader si disponible."""
+    if _PROMPT_LOADER_AVAILABLE and _PROMPT_LOADER is not None:
+        try:
+            return _PROMPT_LOADER.build_triage_prompt(findings, target, level)
+        except Exception:
+            pass
+    # Fallback hardcodé
 
     # Dédupliquer et résumer les findings
     by_severity = {"critical": [], "high": [], "medium": [], "low": [], "info": []}
@@ -195,7 +226,15 @@ Réponds en Markdown structuré."""
 
 
 def build_cve_analysis_prompt(findings: list[dict], target: str) -> str:
-    """Prompt spécialisé pour l'analyse CVE."""
+    """Prompt CVE — délègue à PromptLoader si disponible."""
+    if _PROMPT_LOADER_AVAILABLE and _PROMPT_LOADER is not None:
+        try:
+            result = _PROMPT_LOADER.build_cve_prompt(findings, target)
+            if result:
+                return result
+        except Exception:
+            pass
+    # Fallback hardcodé
     cves = [f for f in findings if f.get("tool", "").startswith("grype") or "CVE" in f.get("id", "")]
     if not cves:
         return None
@@ -218,7 +257,15 @@ Réponds en Markdown."""
 
 
 def build_secrets_analysis_prompt(findings: list[dict], target: str) -> str:
-    """Prompt spécialisé pour l'analyse des secrets exposés."""
+    """Prompt secrets — délègue à PromptLoader si disponible."""
+    if _PROMPT_LOADER_AVAILABLE and _PROMPT_LOADER is not None:
+        try:
+            result = _PROMPT_LOADER.build_secrets_prompt(findings, target)
+            if result:
+                return result
+        except Exception:
+            pass
+    # Fallback hardcodé
     secrets = [f for f in findings if f.get("tool", "") in ("gitleaks-secrets", "trufflehog-secrets")]
     if not secrets:
         return None
@@ -271,25 +318,28 @@ def analyze(
         print(f"[AI] 🤖 Modèle : {cfg['model']} @ {cfg['base_url']}")
         print(f"[AI] 📊 Analyse de {len(findings)} findings sur {target}...")
 
+    # Récupérer le prompt système dynamique
+    system_prompt = _get_system_prompt(level)
+
     # 1. Triage général
     triage_prompt = build_triage_prompt(findings, target, level)
     if verbose:
         print("[AI] 🔍 Triage & priorisation...")
-    result["triage"] = call_llm(triage_prompt, SYSTEM_SECURITY_ANALYST, cfg)
+    result["triage"] = call_llm(triage_prompt, system_prompt, cfg)
 
     # 2. Analyse CVE (si findings CVE présents)
     cve_prompt = build_cve_analysis_prompt(findings, target)
     if cve_prompt:
         if verbose:
             print("[AI] 🔴 Analyse CVE...")
-        result["cve_analysis"] = call_llm(cve_prompt, SYSTEM_SECURITY_ANALYST, cfg)
+        result["cve_analysis"] = call_llm(cve_prompt, system_prompt, cfg)
 
     # 3. Analyse secrets (si secrets présents)
     secrets_prompt = build_secrets_analysis_prompt(findings, target)
     if secrets_prompt:
         if verbose:
             print("[AI] 🔑 Analyse des secrets exposés...")
-        result["secrets_analysis"] = call_llm(secrets_prompt, SYSTEM_SECURITY_ANALYST, cfg)
+        result["secrets_analysis"] = call_llm(secrets_prompt, system_prompt, cfg)
 
     if verbose:
         print("[AI] ✅ Analyse IA terminée.")

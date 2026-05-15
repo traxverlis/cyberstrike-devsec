@@ -163,11 +163,25 @@ usage:
     3. Feed findings into further testing (SQLi, LFI, auth bypass)
 
 high_value_targets:
-  - "/admin", "/administrator", "/wp-admin", "/phpmyadmin"
-  - "/.git", "/.env", "/config.php", "/web.config", "/application.properties"
-  - "/backup", "/backup.zip", "/db.sql"
-  - "/api/v1", "/api/v2", "/swagger", "/openapi.json"
-  - "/actuator", "/actuator/health", "/actuator/env" (Spring Boot)
+  - "/admin"
+  - "/administrator"
+  - "/wp-admin"
+  - "/phpmyadmin"
+  - "/.git"
+  - "/.env"
+  - "/config.php"
+  - "/web.config"
+  - "/application.properties"
+  - "/backup"
+  - "/backup.zip"
+  - "/db.sql"
+  - "/api/v1"
+  - "/api/v2"
+  - "/swagger"
+  - "/openapi.json"
+  - "/actuator"
+  - "/actuator/health"
+  - "/actuator/env"
 
 examples:
   basic: |

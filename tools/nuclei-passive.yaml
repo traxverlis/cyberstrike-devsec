@@ -165,7 +165,7 @@ output_schema:
       timestamp: string
 
 notes:
-  - Update nuclei templates before scanning: `nuclei -update-templates`
+  - "Update nuclei templates before scanning: nuclei -update-templates"
   - Passive templates do NOT send exploit payloads
   - -no-interactsh prevents out-of-band DNS/HTTP callbacks
   - SARIF output integrates with GitHub Code Scanning and VS Code

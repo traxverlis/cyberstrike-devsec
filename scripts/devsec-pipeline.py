@@ -31,6 +31,25 @@ from rich.progress import (
 from rich.table import Table
 from rich import print as rprint
 
+# ── Dynamic loaders (Option C) ──────────────────────────────────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).parent))
+import shutil
+try:
+    from tool_loader import ToolLoader, AdaptiveScanner
+    from prompt_loader import PromptLoader
+    _TOOLS_DIR  = Path(__file__).parent.parent / "tools"
+    _AGENTS_DIR = Path(__file__).parent.parent / "agents"
+    _SKILLS_DIR = Path(__file__).parent.parent / "skills"
+    _ROLES_DIR  = Path(__file__).parent.parent / "roles"
+    _tool_loader   = ToolLoader(_TOOLS_DIR) if _TOOLS_DIR.exists() else None
+    _prompt_loader = PromptLoader(_AGENTS_DIR, _SKILLS_DIR, _ROLES_DIR) if _AGENTS_DIR.exists() else None
+    _LOADERS_AVAILABLE = _tool_loader is not None
+except ImportError as _e:
+    _LOADERS_AVAILABLE = False
+    _tool_loader = None
+    _prompt_loader = None
+    AdaptiveScanner = None
+    print(f"[yellow]⚠  Loaders non disponibles ({_e}) — fallback mode[/yellow]")
 console = Console()
 
 # ── Exit codes ────────────────────────────────────────────────────────────────
@@ -138,16 +157,30 @@ def verify_consent(consent_path: str | None, level: int) -> tuple[bool, str]:
 # ── Scan commands per level ───────────────────────────────────────────────────
 
 def get_scan_commands(args: argparse.Namespace, output_dir: Path) -> list[dict[str, Any]]:
-    """Return list of scan command definitions for the given level."""
+    """Return list of scan command definitions for the given level.
+    
+    Delègue à ToolLoader.build_scan_commands() si disponible (Option C),
+    sinon fallback vers les commandes hardcodées.
+    """
+    source = args.source_dir or args.target
+
+    if _LOADERS_AVAILABLE:
+        tools_dir = Path(__file__).parent.parent / "tools"
+        loader = ToolLoader(tools_dir=tools_dir)
+        return loader.build_scan_commands(
+            level=args.level,
+            target=args.target,
+            output_dir=output_dir,
+            source=source,
+        )
+
+    # ── Fallback hardcodé (si tool_loader non disponible) ──────────────────
+    console.log("[yellow]⚠  ToolLoader indisponible — utilisation des commandes hardcodées[/yellow]")
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
-
-    source = args.source_dir or args.target
     target = args.target
-
     scans: list[dict[str, Any]] = []
 
-    # ── Level 1: static analysis ──
     if args.level >= 1:
         scans += [
             {
@@ -187,83 +220,30 @@ def get_scan_commands(args: argparse.Namespace, output_dir: Path) -> list[dict[s
                 "output_file": raw_dir / "gitleaks-results.json",
             },
         ]
-
-    # ── Level 2: active light scan ──
     if args.level >= 2:
         scans += [
             {
                 "name": "nmap-portscan",
                 "description": "Port scan (nmap)",
-                "cmd": [
-                    "nmap", "-sV", "-sC",
-                    "-oX", str(raw_dir / "nmap-results.xml"),
-                    target,
-                ],
+                "cmd": ["nmap", "-sV", "-sC", "-oX", str(raw_dir / "nmap-results.xml"), target],
                 "output_file": raw_dir / "nmap-results.xml",
             },
             {
                 "name": "nuclei-web",
                 "description": "Web vulnerability scan (Nuclei)",
-                "cmd": [
-                    "nuclei", "-u", target,
-                    "-j",
-                    "-o", str(raw_dir / "nuclei-results.json"),
-                    "-severity", "medium,high,critical",
-                ],
+                "cmd": ["nuclei", "-u", target, "-j", "-o", str(raw_dir / "nuclei-results.json"), "-severity", "medium,high,critical"],
                 "output_file": raw_dir / "nuclei-results.json",
             },
-            {
-                "name": "testssl",
-                "description": "TLS/SSL analysis (testssl.sh)",
-                "cmd": [
-                    "testssl", "--json", str(raw_dir / "testssl-results.json"),
-                    target,
-                ],
-                "output_file": raw_dir / "testssl-results.json",
-            },
-            {
-                "name": "nikto",
-                "description": "Web server scan (Nikto)",
-                "cmd": [
-                    "nikto",
-                    "-h", target,
-                    "-Format", "json",
-                    "-output", str(raw_dir / "nikto-results.json"),
-                ],
-                "output_file": raw_dir / "nikto-results.json",
-            },
         ]
-
-    # ── Level 3: full pentest ──
     if args.level >= 3:
         scans += [
             {
                 "name": "zaproxy-active",
                 "description": "Active web app scan (OWASP ZAP)",
-                "cmd": [
-                    "zap-baseline.py",
-                    "-t", target,
-                    "-J", str(raw_dir / "zap-results.json"),
-                    "-l", "WARN",
-                ],
+                "cmd": ["zap-baseline.py", "-t", target, "-J", str(raw_dir / "zap-results.json"), "-l", "WARN"],
                 "output_file": raw_dir / "zap-results.json",
             },
-            {
-                "name": "sqlmap",
-                "description": "SQL injection test (sqlmap)",
-                "cmd": [
-                    "sqlmap",
-                    "-u", target,
-                    "--batch",
-                    "--level=3",
-                    "--risk=2",
-                    "--output-dir", str(raw_dir / "sqlmap"),
-                    "--format=json",
-                ],
-                "output_file": raw_dir / "sqlmap",
-            },
         ]
-
     return scans
 
 
@@ -633,7 +613,7 @@ async def main() -> int:
     record_audit("pipeline_start", args.target, "devsec-pipeline", args.operator, consent_id, f"level={args.level}")
 
     # ── Run scans in parallel ─────────────────────────────────────────────────
-    console.rule(f"[cyan]Step {'3' if args.level == 3 else '2'}: Running Scans (Level {args.level})[/cyan]")
+    console.rule(f"[cyan]Step {'3' if args.level == 3 else '2'}: Running Scans (Level {args.level}) — Phase 1[/cyan]")
 
     scans = get_scan_commands(args, output_dir)
     all_findings: list[dict] = []
@@ -658,6 +638,55 @@ async def main() -> int:
         scan_results = await asyncio.gather(*tasks)
 
     scan_results_list = list(scan_results)
+
+    # ── Phase 2 : scans adaptatifs (Level 2+) ──────────────────────────────────────
+    if args.level >= 2:
+        console.rule("[cyan]Phase 2 : scans adaptatifs (basés sur découvertes Phase 1)[/cyan]")
+        try:
+            if AdaptiveScanner is None or _tool_loader is None:
+                raise ImportError("AdaptiveScanner ou ToolLoader non disponible")
+
+            raw_dir = output_dir / "raw"
+            adaptive = AdaptiveScanner(tool_loader=_tool_loader, raw_dir=raw_dir)
+
+            def run_phase2_scan(scan: dict) -> None:
+                """Wrapper sync pour lancer un scan Phase 2."""
+                try:
+                    cmd = [str(x) for x in scan["cmd"]]
+                    if not shutil.which(cmd[0]):
+                        console.log(f"[dim]⏭  {scan['description']} — outil absent, ignoré[/dim]")
+                        return
+                    out_file = scan.get("output_file")
+                    proc = subprocess.run(
+                        cmd, capture_output=True, timeout=120
+                    )
+                    if out_file and Path(out_file).exists():
+                        console.log(f"[green]✅ {scan['description']}[/green]")
+                    else:
+                        # Sauvegarder stdout si pas de fichier de sortie
+                        if out_file and proc.stdout:
+                            Path(out_file).write_bytes(proc.stdout)
+                        console.log(f"[yellow]⚠️  {scan['description']} (sortie vide)[/yellow]")
+                except subprocess.TimeoutExpired:
+                    console.log(f"[yellow]⏱  {scan['description']} — timeout[/yellow]")
+                except Exception as e:
+                    console.log(f"[red]❌ {scan['description']} — {e}[/red]")
+
+            phase2_scans = adaptive.run_phase2(run_phase2_scan)
+
+            if phase2_scans:
+                console.log(f"[green]✅ Phase 2 : {len(phase2_scans)} scan(s) adaptatif(s) terminés[/green]")
+                # Ajouter les résultats Phase 2 à scan_results_list
+                for s in phase2_scans:
+                    scan_results_list.append({"name": s["name"], "description": s["description"],
+                                              "status": "success", "adaptive": True})
+            else:
+                console.log("[dim]ℹ  Phase 2 : aucun scan adaptatif généré (normal si pas de ports HTTP découverts)[/dim]")
+
+        except ImportError as e:
+            console.log(f"[yellow]⚠️  AdaptiveScanner non disponible: {e}[/yellow]")
+        except Exception as e:
+            console.log(f"[yellow]⚠️  Phase 2 ignorée: {e}[/yellow]")
 
     # ── Analyse IA (optionnelle) ──────────────────────────────────────────────
     ai_section = ""

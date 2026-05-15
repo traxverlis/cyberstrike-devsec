@@ -209,7 +209,7 @@ analysis_rules:
 dangerous_headers:
   Server:
     description: Reveals web server software and version — aids fingerprinting
-    recommendation: Remove or obscure (e.g., Server: webserver)
+    recommendation: "Remove or obscure (e.g., Server: webserver)"
     severity_if_detailed: LOW
 
   X-Powered-By:

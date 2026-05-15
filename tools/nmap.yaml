@@ -163,7 +163,7 @@ output_schema:
 
 notes:
   - Requires root for SYN scan (-sS) and OS detection (-O)
-  - "-A" enables OS detection, version detection, script scanning, and traceroute"
+  - "-A enables OS detection, version detection, script scanning, and traceroute"
   - Use T3 or lower for stealthy/polite scans
   - Store results in dated output directory for audit trail
   - Vulners script requires internet access to vulners.com API
