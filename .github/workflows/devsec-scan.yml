@@ -257,6 +257,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     outputs:
+      secret-count: ${{ steps.summary.outputs.secrets }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
